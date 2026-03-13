@@ -1,0 +1,9 @@
+{
+  "name": "Sunrise bakery Yard style",
+  "description": "fresh Jamaican baked goods",
+  "url": "https://sunrise-bakery-yard-style-wlw2.onrender.com/mcp",
+  "transport": {
+    "type": "http",
+    "url": "https://sunrise-bakery-yard-style-wlw2.onrender.com/mcp"
+  }
+}
