@@ -1,0 +1,4 @@
+/api/ai-visit  https://xwbgqkbwutjuodzhknhr.supabase.co/functions/v1/ai-analytics?site_key=sunrise-bakery-yard-style-wlw2  200
+/api/*        https://xwbgqkbwutjuodzhknhr.supabase.co/functions/v1/site-api?site_key=sunrise-bakery-yard-style-wlw2&action=:splat  200
+/mcp          https://xwbgqkbwutjuodzhknhr.supabase.co/functions/v1/site-mcp?site_key=sunrise-bakery-yard-style-wlw2  200
+/.well-known/mcp.json  /mcp-manifest.json  200
