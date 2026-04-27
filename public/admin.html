@@ -121,18 +121,20 @@
             </div>
             <aside class="ai-chat-panel">
                 <div class="ai-chat-header">
-                    <div>
-                        <h2 class="ai-chat-title">AI editor</h2>
-                        <p class="ai-chat-sub" id="ai-selected-label">Click text/images in the preview, or describe a content or design change below.</p>
+                    <div class="ai-chat-header-top">
+                        <div class="ai-chat-heading">
+                            <h2 class="ai-chat-title">AI editor</h2>
+                        </div>
+                        <div class="ai-chat-tools">
+                            <button id="ai-guide-btn" class="btn btn-ghost" type="button" title="Editor guide" aria-expanded="false">Guide</button>
+                            <button id="ai-tools-btn" class="btn btn-ghost" type="button" title="Site tools" aria-expanded="false">Tools</button>
+                            <button id="ai-history-btn" class="btn btn-ghost" type="button" title="Recent changes" aria-expanded="false">History</button>
+                            <button id="ai-clear-selection" class="btn btn-ghost btn-icon" title="Clear selection" hidden>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                        </div>
                     </div>
-                    <div class="ai-chat-tools">
-                        <button id="ai-guide-btn" class="btn btn-ghost" type="button" title="Editor guide">Guide</button>
-                        <button id="ai-tools-btn" class="btn btn-ghost" type="button" title="Site tools">Tools</button>
-                        <button id="ai-history-btn" class="btn btn-ghost" type="button" title="Recent changes">History</button>
-                        <button id="ai-clear-selection" class="btn btn-ghost btn-icon" title="Clear selection" hidden>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                        </button>
-                    </div>
+                    <p class="ai-chat-sub" id="ai-selected-label">Select text or an image, or type a content/design request.</p>
                 </div>
                 <div id="revision-drawer" class="revision-drawer" hidden>
                     <div class="revision-drawer-head">
