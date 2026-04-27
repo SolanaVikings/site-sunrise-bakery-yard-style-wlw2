@@ -1365,9 +1365,42 @@ function appendChatMessage(role, html) {
 function getAiDesignPreviewCss(designChanges) {
     if (!Array.isArray(designChanges) || designChanges.length === 0) return '';
     return designChanges
-        .map(change => change && typeof change.css === 'string' ? change.css.trim() : '')
+        .map(change => sanitiseAiDesignCss(change))
         .filter(Boolean)
         .join('\n\n');
+}
+
+function isButtonScopedAiDesignChange(change) {
+    const text = ((change && change.label) || '') + ' ' + ((change && change.css) || '');
+    const lower = text.toLowerCase();
+    const mentionsButtons = /\b(button|buttons|cta|ctas|call to action|call-to-action|nav cta)\b/.test(lower);
+    const explicitlyGlobal = /\b(whole site|entire site|global theme|site theme|brand palette|site palette|accent colo[u]?r|primary colo[u]?r|all accent|theme colo[u]?rs|global font|body font)\b/.test(lower);
+    return mentionsButtons && !explicitlyGlobal;
+}
+
+function aiDesignSelectorIsButtonScoped(selector) {
+    return /button|\bbtn\b|btn-|cta|call-to-action|\[data-content[*^$|~]?=.*cta/i.test(selector || '');
+}
+
+function keepButtonScopedAiCssOnly(css) {
+    const rules = String(css || '').match(/[^{}]+{[^{}]*}/g);
+    if (!rules) return css || '';
+    return rules
+        .map(rule => {
+            const braceIdx = rule.indexOf('{');
+            const selector = rule.slice(0, braceIdx).trim();
+            if (!selector || selector.charAt(0) === '@') return '';
+            if (/^:root\b|^html\b|^body\b/i.test(selector)) return '';
+            return aiDesignSelectorIsButtonScoped(selector) ? rule.trim() : '';
+        })
+        .filter(Boolean)
+        .join('\n\n');
+}
+
+function sanitiseAiDesignCss(change) {
+    const css = change && typeof change.css === 'string' ? change.css.trim() : '';
+    if (!css) return '';
+    return isButtonScopedAiDesignChange(change) ? keepButtonScopedAiCssOnly(css).trim() : css;
 }
 
 function clearAiDesignPreview() {
@@ -1558,7 +1591,7 @@ async function applyAiDesignChange(change) {
     if (!CONFIG.SUPABASE_URL || !sessionToken) {
         throw new Error('Sign in again before publishing design changes');
     }
-    const css = change && typeof change.css === 'string' ? change.css.trim() : '';
+    const css = sanitiseAiDesignCss(change);
     if (!css) throw new Error('Design change is empty');
 
     const res = await fetch(CONFIG.SUPABASE_URL + '/functions/v1/admin-edit', {
