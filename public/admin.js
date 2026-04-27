@@ -625,7 +625,10 @@ function showDashboard() {
     updateAdminHeaderHeight();
     if (!window.__adminHeaderResizeAttached) {
         window.__adminHeaderResizeAttached = true;
-        window.addEventListener('resize', updateAdminHeaderHeight);
+        window.addEventListener('resize', () => {
+            updateAdminHeaderHeight();
+            updateAiChatHeaderHeight();
+        });
     }
 }
 
@@ -638,7 +641,7 @@ let currentAiPreviewPage = 'index';
 let currentAiPreviewDevice = 'desktop';
 let revisionCache = [];
 
-const AI_DEFAULT_HINT = 'Click text/images in the preview, or describe a content or design change below.';
+const AI_DEFAULT_HINT = 'Select text or an image, or type a content/design request.';
 
 function updateAdminHeaderHeight() {
     const header = document.querySelector('.dashboard-header');
@@ -646,8 +649,16 @@ function updateAdminHeaderHeight() {
     document.documentElement.style.setProperty('--admin-header-height', Math.ceil(header.getBoundingClientRect().height) + 'px');
 }
 
+function updateAiChatHeaderHeight() {
+    const panel = document.querySelector('.ai-chat-panel');
+    const header = document.querySelector('.ai-chat-header');
+    if (!panel || !header) return;
+    panel.style.setProperty('--ai-chat-header-height', Math.ceil(header.getBoundingClientRect().height) + 'px');
+}
+
 function setAdminEditorMode(mode) {
     updateAdminHeaderHeight();
+    updateAiChatHeaderHeight();
     const ai = document.getElementById('ai-editor-main');
     const grid = document.getElementById('dashboard-main');
     const toggle = document.getElementById('all-fields-toggle');
@@ -669,7 +680,7 @@ function setAdminEditorMode(mode) {
     if (toggle) toggle.textContent = showFields ? 'AI editor' : 'All fields';
 
     if (showFields) {
-        setAiToolsDrawerOpen(false);
+        closeAiSideDrawers();
         movePluginPanels('dashboard');
     }
 }
@@ -693,32 +704,27 @@ function initAiEditor() {
     initAiPreviewControls();
     initAiImageTools();
     restoreAiChatHistory();
+    updateAiChatHeaderHeight();
+    observeAiToolPanels();
 
     if (historyBtn) {
         historyBtn.addEventListener('click', () => {
             const drawer = document.getElementById('revision-drawer');
             if (!drawer) return;
             const opening = drawer.hasAttribute('hidden');
-            if (opening) {
-                drawer.removeAttribute('hidden');
-                loadRevisionHistory();
-            } else {
-                drawer.setAttribute('hidden', '');
-            }
+            setAiSideDrawerOpen('history', opening);
         });
     }
     if (guideBtn) {
         guideBtn.addEventListener('click', () => {
             const drawer = document.getElementById('ai-guide-drawer');
             if (!drawer) return;
-            if (drawer.hasAttribute('hidden')) drawer.removeAttribute('hidden');
-            else drawer.setAttribute('hidden', '');
+            setAiSideDrawerOpen('guide', drawer.hasAttribute('hidden'));
         });
     }
     if (guideCloseBtn) {
         guideCloseBtn.addEventListener('click', () => {
-            const drawer = document.getElementById('ai-guide-drawer');
-            if (drawer) drawer.setAttribute('hidden', '');
+            setAiSideDrawerOpen('guide', false);
         });
     }
     if (toolsBtn) {
@@ -844,16 +850,83 @@ function getAiPluginContext() {
     };
 }
 
-function setAiToolsDrawerOpen(open) {
-    const drawer = document.getElementById('ai-tools-drawer');
-    if (!drawer) return;
-    if (open) {
-        movePluginPanels('ai');
-        drawer.removeAttribute('hidden');
-    } else {
-        drawer.setAttribute('hidden', '');
-        movePluginPanels('dashboard');
+function aiDrawerConfig() {
+    return {
+        guide: { drawer: 'ai-guide-drawer', button: 'ai-guide-btn' },
+        tools: { drawer: 'ai-tools-drawer', button: 'ai-tools-btn' },
+        history: { drawer: 'revision-drawer', button: 'ai-history-btn' },
+    };
+}
+
+function closeAiSideDrawers() {
+    const config = aiDrawerConfig();
+    Object.keys(config).forEach(name => setAiSideDrawerOpen(name, false, true));
+}
+
+function setAiSideDrawerOpen(name, open, skipCloseOthers) {
+    const config = aiDrawerConfig();
+    const item = config[name];
+    if (!item) return;
+
+    if (open && !skipCloseOthers) {
+        Object.keys(config).forEach(other => {
+            if (other !== name) setAiSideDrawerOpen(other, false, true);
+        });
     }
+
+    const drawer = document.getElementById(item.drawer);
+    const button = document.getElementById(item.button);
+    if (!drawer) return;
+
+    if (open) drawer.removeAttribute('hidden');
+    else drawer.setAttribute('hidden', '');
+
+    if (button) {
+        button.classList.toggle('active', !!open);
+        button.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+
+    if (name === 'tools') {
+        movePluginPanels(open ? 'ai' : 'dashboard');
+        if (!skipCloseOthers) syncAiToolsButtonState();
+    }
+    if (name === 'history' && open) {
+        loadRevisionHistory();
+    }
+}
+
+function setAiToolsDrawerOpen(open) {
+    setAiSideDrawerOpen('tools', open);
+}
+
+function aiHasSiteTools() {
+    const panel = document.getElementById('plugin-panels');
+    return !!(panel && panel.querySelector('.pp-section'));
+}
+
+function syncAiToolsButtonState() {
+    const toolsBtn = document.getElementById('ai-tools-btn');
+    if (!toolsBtn) return;
+    const hasTools = aiHasSiteTools();
+    toolsBtn.hidden = !hasTools;
+    if (!hasTools) {
+        const drawer = document.getElementById('ai-tools-drawer');
+        if (drawer) drawer.setAttribute('hidden', '');
+        toolsBtn.classList.remove('active');
+        toolsBtn.setAttribute('aria-expanded', 'false');
+    }
+    updateAiChatHeaderHeight();
+}
+
+function observeAiToolPanels() {
+    if (window.__aiToolPanelObserverAttached) return;
+    const panel = document.getElementById('plugin-panels');
+    if (!panel || typeof MutationObserver === 'undefined') return;
+    window.__aiToolPanelObserverAttached = true;
+    const observer = new MutationObserver(() => syncAiToolsButtonState());
+    observer.observe(panel, { childList: true, subtree: true });
+    setTimeout(syncAiToolsButtonState, 0);
+    setTimeout(syncAiToolsButtonState, 700);
 }
 
 function movePluginPanels(target) {
