@@ -3,13 +3,23 @@
 // ============================================
 
 // Initialize Supabase
+// CONFIG is declared in config.js with `const`, which DOESN'T attach to
+// window in plain (non-module) scripts. Use the bare identifier behind
+// `typeof` so we don't blow up when window.CONFIG is undefined.
 let supabaseClient = null;
-if (window.CONFIG && CONFIG.SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+if (typeof CONFIG !== 'undefined' && CONFIG.SUPABASE_URL && CONFIG.SUPABASE_URL !== 'YOUR_SUPABASE_URL' && typeof window.supabase !== 'undefined') {
     supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 }
 
 // Load content on page load
 document.addEventListener('DOMContentLoaded', loadSiteContent);
+
+// Keep the footer copyright year fresh — runs on every page that has the span,
+// even before site content has loaded.
+document.addEventListener('DOMContentLoaded', function() {
+    var yearEl = document.getElementById('copyright-year');
+    if (yearEl) yearEl.textContent = new Date().getFullYear();
+});
 
 async function loadSiteContent() {
     // Get all editable elements
@@ -18,6 +28,8 @@ async function loadSiteContent() {
     if (!supabaseClient) {
         // Demo mode: content already visible in HTML
         console.log('Demo mode: Using default content');
+        window._siteContentLoaded = true;
+        window.dispatchEvent(new Event('siteContentLoaded'));
         return;
     }
 
@@ -39,6 +51,9 @@ async function loadSiteContent() {
             contentMap[`${item.section}.${item.field_name}`] = item.content;
         });
 
+        // Expose for plugins.js to read saved plugin config
+        window._siteContentMap = contentMap;
+
         // Apply content to elements
         editableElements.forEach(el => {
             const key = el.dataset.content;
@@ -56,6 +71,10 @@ async function loadSiteContent() {
         });
 
         console.log('Content loaded successfully');
+
+        // Signal plugins that content is ready for schema generation
+        window._siteContentLoaded = true;
+        window.dispatchEvent(new Event('siteContentLoaded'));
 
     } catch (err) {
         console.error('Error loading content:', err);
