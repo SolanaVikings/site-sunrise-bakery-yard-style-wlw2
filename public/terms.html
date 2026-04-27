@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co https://api.stripe.com; img-src 'self' https://*.supabase.co https://images.unsplash.com https://*.googleusercontent.com https://maps.gstatic.com data: blob:; frame-src 'none';">
+    <title>Terms & Conditions</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="styles.css">
+    <script>
+    // Load per-site fonts from CONFIG.FONTS
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof CONFIG !== 'undefined' && CONFIG.FONTS) {
+            CONFIG.FONTS.forEach(function(url) {
+                // Skip if already loaded via static <link>
+                if (document.querySelector('link[href="' + url + '"]')) return;
+                var link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = url;
+                document.head.appendChild(link);
+            });
+        }
+        var nameEl = document.querySelector('[data-content="site.name"]');
+        if (nameEl && nameEl.textContent && nameEl.textContent !== 'Your Business Name') {
+            document.title = 'Terms & Conditions — ' + nameEl.textContent;
+        }
+    });
+    </script>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="nav">
+        <a href="index.html" class="nav-logo">
+            <span class="logo-diamond">&bull;</span>
+            <span data-content="site.name">Your Business Name</span>
+        </a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+        </div>
+    </nav>
+
+    <main class="legal-page">
+        <h1>Terms & Conditions</h1>
+        <p class="legal-updated">Last updated: <span data-content="terms.last_updated">January 1, 2025</span></p>
+
+        <div class="legal-section">
+            <h2>Introduction</h2>
+            <div data-content="terms.intro">Welcome to our website. By accessing and using this website, you accept and agree to be bound by the terms and conditions outlined below. If you do not agree with any part of these terms, please do not use our website or services.</div>
+        </div>
+
+        <div class="legal-section">
+            <h2>Use of Service</h2>
+            <div data-content="terms.use_of_service">You may use our website and services for lawful purposes only. You agree not to use our services in any way that violates applicable laws or regulations, or that could damage, disable, or impair the website.</div>
+        </div>
+
+        <div class="legal-section">
+            <h2>Intellectual Property</h2>
+            <div data-content="terms.intellectual_property">All content on this website, including text, images, logos, and design elements, is the property of the business and is protected by copyright and intellectual property laws. You may not reproduce, distribute, or modify any content without prior written consent.</div>
+        </div>
+
+        <div class="legal-section">
+            <h2>User Obligations</h2>
+            <div data-content="terms.user_obligations">When using our services or submitting information through our website, you agree to provide accurate and complete information. You are responsible for maintaining the confidentiality of any account credentials and for all activities under your account.</div>
+        </div>
+
+        <div class="legal-section">
+            <h2>Payments & Refunds</h2>
+            <div data-content="terms.payment_terms">All prices are displayed in the applicable currency and include taxes where required. Payment is processed securely through our payment provider. Refund policies vary by service — please contact us for details on our refund and cancellation policy.</div>
+        </div>
+
+        <div class="legal-section">
+            <h2>Data Collection & Use</h2>
+            <div data-content="terms.data_use">We collect personal information that you voluntarily provide when using our services, such as your name, email address, and phone number. This data is used to provide and improve our services. For full details, please see our Privacy Policy.</div>
+        </div>
+
+        <div class="legal-section">
+            <h2>Cookies</h2>
+            <div data-content="terms.cookies">Our website uses cookies to enhance your browsing experience. Cookies are small text files stored on your device that help us remember your preferences. You can manage cookie settings through your browser. Continued use of our site implies consent to our cookie usage.</div>
+        </div>
+
+        <div class="legal-section">
+            <h2>Limitation of Liability</h2>
+            <div data-content="terms.liability">To the fullest extent permitted by law, we shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of our website or services. Our total liability shall not exceed the amount you paid for the specific service in question.</div>
+        </div>
+
+        <div class="legal-section">
+            <h2>Modifications to Terms</h2>
+            <div data-content="terms.modifications">We reserve the right to update these terms at any time. Changes will be posted on this page with an updated revision date. Your continued use of the website after changes are posted constitutes acceptance of the revised terms.</div>
+        </div>
+
+        <div class="legal-section">
+            <h2>Governing Law</h2>
+            <div data-content="terms.governing_law">These terms shall be governed by and construed in accordance with the laws of the jurisdiction in which the business operates, without regard to conflict of law principles.</div>
+        </div>
+
+        <div class="legal-section">
+            <h2>Contact</h2>
+            <div data-content="terms.contact">If you have any questions about these terms, please contact us using the information provided on our website.</div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-content">
+            <div class="footer-brand">
+                <span class="logo-diamond">&bull;</span>
+                <span data-content="site.name">Your Business Name</span>
+            </div>
+            <p class="footer-tagline" data-content="site.tagline">Your tagline goes here.</p>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; <span id="copyright-year"></span> Your Business Name. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1"></script>
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+    <script src="plugins.js"></script>
+</body>
+</html>
