@@ -621,6 +621,12 @@ function showDashboard() {
 
     // Initialise AI content editor (iframe + chat split view)
     initAiEditor();
+    setAdminEditorMode('ai');
+    updateAdminHeaderHeight();
+    if (!window.__adminHeaderResizeAttached) {
+        window.__adminHeaderResizeAttached = true;
+        window.addEventListener('resize', updateAdminHeaderHeight);
+    }
 }
 
 // ============ AI EDITOR ============
@@ -634,12 +640,47 @@ let revisionCache = [];
 
 const AI_DEFAULT_HINT = 'Click editable text or images in the preview, or describe a content change below.';
 
+function updateAdminHeaderHeight() {
+    const header = document.querySelector('.dashboard-header');
+    if (!header) return;
+    document.documentElement.style.setProperty('--admin-header-height', Math.ceil(header.getBoundingClientRect().height) + 'px');
+}
+
+function setAdminEditorMode(mode) {
+    updateAdminHeaderHeight();
+    const ai = document.getElementById('ai-editor-main');
+    const grid = document.getElementById('dashboard-main');
+    const toggle = document.getElementById('all-fields-toggle');
+    const showFields = mode === 'fields';
+
+    if (ai) {
+        if (showFields) ai.setAttribute('hidden', '');
+        else ai.removeAttribute('hidden');
+    }
+    if (grid) {
+        if (showFields) grid.removeAttribute('hidden');
+        else grid.setAttribute('hidden', '');
+    }
+    if (saveBar) {
+        if (showFields) saveBar.removeAttribute('hidden');
+        else saveBar.setAttribute('hidden', '');
+    }
+    if (dashboard) dashboard.classList.toggle('is-ai-mode', !showFields);
+    if (toggle) toggle.textContent = showFields ? 'AI content' : 'All fields';
+
+    if (showFields) {
+        setAiToolsDrawerOpen(false);
+        movePluginPanels('dashboard');
+    }
+}
+
 function initAiEditor() {
     const iframe = document.getElementById('ai-preview-iframe');
     const form = document.getElementById('ai-chat-form');
     const input = document.getElementById('ai-chat-input');
     const messages = document.getElementById('ai-chat-messages');
     const clearSelectionBtn = document.getElementById('ai-clear-selection');
+    const selectedChipClearBtn = document.getElementById('ai-selected-chip-clear');
     const allFieldsBtn = document.getElementById('all-fields-toggle');
     const guideBtn = document.getElementById('ai-guide-btn');
     const guideCloseBtn = document.getElementById('ai-guide-close-btn');
@@ -703,15 +744,9 @@ function initAiEditor() {
             if (!ai || !grid) return;
             const showingForm = !grid.hasAttribute('hidden');
             if (showingForm) {
-                grid.setAttribute('hidden', '');
-                ai.removeAttribute('hidden');
-                allFieldsBtn.textContent = 'All fields';
+                setAdminEditorMode('ai');
             } else {
-                setAiToolsDrawerOpen(false);
-                grid.removeAttribute('hidden');
-                ai.setAttribute('hidden', '');
-                movePluginPanels('dashboard');
-                allFieldsBtn.textContent = 'AI content';
+                setAdminEditorMode('fields');
             }
         });
     }
@@ -744,6 +779,11 @@ function initAiEditor() {
     clearSelectionBtn.addEventListener('click', () => {
         clearAiSelection(AI_DEFAULT_HINT);
     });
+    if (selectedChipClearBtn) {
+        selectedChipClearBtn.addEventListener('click', () => {
+            clearAiSelection(AI_DEFAULT_HINT);
+        });
+    }
 
     // Submit chat
     form.addEventListener('submit', async (e) => {
@@ -923,11 +963,66 @@ function clearAiSelection(label) {
     const selectedLabel = document.getElementById('ai-selected-label');
     if (selectedLabel) selectedLabel.textContent = label || AI_DEFAULT_HINT;
 
+    const selectedChip = document.getElementById('ai-selected-chip');
+    if (selectedChip) selectedChip.setAttribute('hidden', '');
+    const selectedChipLabel = document.getElementById('ai-selected-chip-label');
+    if (selectedChipLabel) selectedChipLabel.textContent = 'No element selected';
+    const input = document.getElementById('ai-chat-input');
+    if (input) input.placeholder = 'Describe a change...';
+
     const iframe = document.getElementById('ai-preview-iframe');
     try {
         const doc = iframe && iframe.contentDocument;
         if (doc) doc.querySelectorAll('.__ai-selected').forEach(el => el.classList.remove('__ai-selected'));
     } catch (_) {}
+}
+
+function setAiSelectionUi(label, selectedKey, isImage, isLayoutOnly) {
+    aiSelectedKey = selectedKey || null;
+    aiSelectedIsImage = !!isImage && !!selectedKey;
+    setAiImageToolsVisible(aiSelectedIsImage);
+
+    const selectedLabel = document.getElementById('ai-selected-label');
+    if (selectedLabel) selectedLabel.textContent = label || AI_DEFAULT_HINT;
+
+    const selectedChip = document.getElementById('ai-selected-chip');
+    const selectedChipLabel = document.getElementById('ai-selected-chip-label');
+    if (selectedChip && selectedChipLabel) {
+        selectedChipLabel.textContent = label || 'No element selected';
+        selectedChip.removeAttribute('hidden');
+    }
+
+    const clearBtn = document.getElementById('ai-clear-selection');
+    if (clearBtn) clearBtn.hidden = false;
+
+    const input = document.getElementById('ai-chat-input');
+    if (input) {
+        if (isLayoutOnly) {
+            input.placeholder = 'This is layout-only. Click highlighted copy or image inside it to edit content.';
+        } else if (aiSelectedIsImage) {
+            input.placeholder = 'Replace this image, or describe the image change...';
+        } else {
+            input.placeholder = 'What do you want to change about this content?';
+        }
+        input.focus();
+    }
+}
+
+function getReadableElementLabel(el) {
+    if (!el || !el.tagName) return 'element';
+    const tag = el.tagName.toLowerCase();
+    const id = el.id ? '#' + el.id : '';
+    const classes = el.classList
+        ? Array.from(el.classList)
+            .filter(c => c && !c.startsWith('__') && c !== 'data-ai-selected')
+            .slice(0, 2)
+            .map(c => '.' + c)
+            .join('')
+        : '';
+    const key = el.getAttribute && el.getAttribute('data-content');
+    const text = (el.textContent || el.alt || '').trim().replace(/\s+/g, ' ').slice(0, 42);
+    if (key) return key + (text ? ' - "' + text + (text.length === 42 ? '...' : '') + '"' : '');
+    return tag + id + classes + (text ? ' - "' + text + (text.length === 42 ? '...' : '') + '"' : '');
 }
 
 function parseContentKey(key) {
@@ -1119,6 +1214,11 @@ async function applyAiFieldChange(key, value, label, source) {
 }
 
 function initAiPreviewControls() {
+    const urlBar = document.getElementById('ai-preview-url');
+    if (urlBar && typeof CONFIG !== 'undefined' && CONFIG.SITE_KEY) {
+        urlBar.textContent = CONFIG.SITE_KEY + '.onrender.com';
+    }
+
     const tabs = document.getElementById('ai-preview-page-tabs');
     const deviceButtons = document.querySelectorAll('[data-ai-device]');
     if (tabs && CONFIG.PAGES && CONFIG.PAGES.length > 1) {
@@ -1170,6 +1270,18 @@ function setAiPreviewDevice(device) {
     });
 }
 
+function resolveAiClickTarget(rawTarget, doc) {
+    let node = rawTarget;
+    const inlineTags = { a: 1, span: 1, em: 1, strong: 1, i: 1, b: 1, small: 1, sup: 1, sub: 1, mark: 1, time: 1, abbr: 1 };
+    while (node && node !== doc.body && node.nodeType === 1) {
+        const tag = node.tagName ? node.tagName.toLowerCase() : '';
+        if (!inlineTags[tag]) break;
+        if (!node.parentElement) break;
+        node = node.parentElement;
+    }
+    return (node && node.nodeType === 1) ? node : rawTarget;
+}
+
 function injectAiClickHandlers(iframe) {
     let doc;
     try { doc = iframe.contentDocument; } catch (e) { return; }
@@ -1180,39 +1292,46 @@ function injectAiClickHandlers(iframe) {
     // Inject hover/select highlight CSS into the iframe
     const style = doc.createElement('style');
     style.textContent =
-        '.__ai-hover{outline:2px dashed #C9442B!important;outline-offset:2px!important;cursor:crosshair!important;}' +
-        '.__ai-selected{outline:2px solid #C9442B!important;outline-offset:2px!important;background:rgba(201,68,43,0.06)!important;}';
+        '[data-content]{cursor:crosshair!important;}' +
+        '[data-content].__ai-editable{outline:1px solid rgba(201,68,43,.18)!important;outline-offset:2px!important;}' +
+        '.__ai-hover{outline:2px dashed #C9442B!important;outline-offset:3px!important;cursor:crosshair!important;}' +
+        '.__ai-selected{outline:3px solid #C9442B!important;outline-offset:3px!important;background:rgba(201,68,43,0.07)!important;}';
     doc.head.appendChild(style);
+    doc.querySelectorAll('[data-content]').forEach(el => el.classList.add('__ai-editable'));
 
     let lastHover = null;
     doc.addEventListener('mouseover', (e) => {
-        const target = findEditableTarget(e.target);
+        const target = findEditableTarget(resolveAiClickTarget(e.target, doc));
         if (lastHover && lastHover !== target) lastHover.classList.remove('__ai-hover');
         if (target) { target.classList.add('__ai-hover'); lastHover = target; }
     }, true);
     doc.addEventListener('mouseout', () => { if (lastHover) lastHover.classList.remove('__ai-hover'); }, true);
     doc.addEventListener('click', (e) => {
-        const target = findEditableTarget(e.target);
         e.preventDefault();
         e.stopPropagation();
+        const rawTarget = resolveAiClickTarget(e.target, doc);
+        const target = findEditableTarget(rawTarget);
+
+        doc.querySelectorAll('.__ai-selected').forEach(el => el.classList.remove('__ai-selected'));
+
         if (!target) {
-            clearAiSelection('That part is layout/design. This dashboard edits saved content fields.');
+            if (rawTarget && rawTarget !== doc.body && rawTarget !== doc.documentElement) {
+                rawTarget.classList.add('__ai-selected');
+                setAiSelectionUi('Layout selected: ' + getReadableElementLabel(rawTarget) + '. Published sites can edit saved copy/images only.', null, false, true);
+            } else {
+                clearAiSelection('That part is layout/design. This dashboard edits saved content fields.');
+            }
             return;
         }
         const key = target.getAttribute('data-content');
         if (!key) return;
 
-        // Clear previous selections
-        doc.querySelectorAll('.__ai-selected').forEach(el => el.classList.remove('__ai-selected'));
         target.classList.add('__ai-selected');
 
-        aiSelectedKey = key;
-        aiSelectedIsImage = target.tagName === 'IMG' || looksLikeImageField(key);
-        setAiImageToolsVisible(aiSelectedIsImage);
-        const fieldPreview = aiSelectedIsImage ? 'image field' : '"' + (target.textContent || '').trim().slice(0, 60) + '"';
-        document.getElementById('ai-selected-label').textContent = 'Editing: ' + key + ' \u2014 ' + fieldPreview;
-        document.getElementById('ai-clear-selection').hidden = false;
-        document.getElementById('ai-chat-input').focus();
+        const isImage = target.tagName === 'IMG' || looksLikeImageField(key);
+        const fieldText = (target.textContent || target.alt || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+        const fieldPreview = isImage ? 'image field' : (fieldText ? '"' + fieldText + '"' : 'content field');
+        setAiSelectionUi('Editing: ' + key + ' - ' + fieldPreview, key, isImage, false);
     }, true);
 }
 
