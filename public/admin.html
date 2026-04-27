@@ -96,6 +96,14 @@
         <main class="ai-editor-main" id="ai-editor-main">
             <div class="ai-preview-wrap">
                 <div class="ai-preview-toolbar">
+                    <div class="ai-preview-chrome">
+                        <div class="ai-preview-dots" aria-hidden="true">
+                            <span class="ai-preview-dot dot-red"></span>
+                            <span class="ai-preview-dot dot-yellow"></span>
+                            <span class="ai-preview-dot dot-green"></span>
+                        </div>
+                        <div class="ai-preview-url" id="ai-preview-url">your-site.onrender.com</div>
+                    </div>
                     <div id="ai-preview-page-tabs" class="ai-preview-page-tabs" hidden></div>
                     <div class="ai-device-toggle" aria-label="Preview device">
                         <button type="button" class="ai-device-btn active" data-ai-device="desktop" aria-pressed="true" title="Desktop preview">
@@ -164,6 +172,11 @@
                     </div>
                 </div>
                 <form id="ai-chat-form" class="ai-chat-form">
+                    <div id="ai-selected-chip" class="ai-selected-chip" hidden>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 3l14 9-7 1-3 7z"/></svg>
+                        <span id="ai-selected-chip-label">No element selected</span>
+                        <button type="button" id="ai-selected-chip-clear" title="Clear selection">&times;</button>
+                    </div>
                     <input type="file" id="ai-image-upload-input" accept="image/*" hidden>
                     <div id="ai-image-tools" class="ai-image-tools" hidden>
                         <button type="button" id="ai-image-upload-btn" class="ai-image-tool" title="Upload replacement image">
