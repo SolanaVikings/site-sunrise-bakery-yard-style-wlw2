@@ -92,7 +92,7 @@
             </div>
         </header>
 
-        <!-- AI content editor (primary view) — iframe of live site + chat panel -->
+        <!-- AI editor (primary view) — iframe of live site + chat panel -->
         <main class="ai-editor-main" id="ai-editor-main">
             <div class="ai-preview-wrap">
                 <div class="ai-preview-toolbar">
@@ -122,8 +122,8 @@
             <aside class="ai-chat-panel">
                 <div class="ai-chat-header">
                     <div>
-                        <h2 class="ai-chat-title">AI content editor</h2>
-                        <p class="ai-chat-sub" id="ai-selected-label">Click editable text or images in the preview, or describe a content change below.</p>
+                        <h2 class="ai-chat-title">AI editor</h2>
+                        <p class="ai-chat-sub" id="ai-selected-label">Click text/images in the preview, or describe a content or design change below.</p>
                     </div>
                     <div class="ai-chat-tools">
                         <button id="ai-guide-btn" class="btn btn-ghost" type="button" title="Editor guide">Guide</button>
@@ -156,18 +156,18 @@
                         <button type="button" id="ai-guide-close-btn">Close</button>
                     </div>
                     <div class="ai-guide-list">
-                        <p>Click editable text or images in the preview, then ask for the change.</p>
-                        <p>Review AI suggestions before Apply. Applied AI changes are saved instantly.</p>
+                        <p>Click text or images in the preview, then ask for copy, image, or design changes.</p>
+                        <p>Review AI suggestions before Apply. Content saves instantly; design changes publish to the live site.</p>
                         <p>Use History to roll back saved content fields.</p>
                     </div>
                 </div>
                 <div id="ai-chat-messages" class="ai-chat-messages">
                     <div class="ai-chat-welcome">
-                        <p>Tell me what content you want to change, in plain English.</p>
+                        <p>Tell me what you want to change, in plain English.</p>
                         <ul>
                             <li>"Rewrite the hero headline so it sounds warmer"</li>
                             <li>"Change the main button to <em>Book a call</em>"</li>
-                            <li>"Update the phone number to 0207 123 4567"</li>
+                            <li>"Make the buttons red with a bolder font"</li>
                         </ul>
                     </div>
                 </div>
