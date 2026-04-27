@@ -3,33 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co; img-src 'self' https: data: blob:; frame-src 'self';">
     <title>Edit Your Website</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="brutalist-base.css">
     <link rel="stylesheet" href="admin-styles.css">
+    <link rel="stylesheet" href="admin-brand.css">
 </head>
 <body>
     <!-- Login Screen -->
     <div id="login-screen" class="login-screen">
         <div class="login-card">
             <div class="login-icon">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
                 </svg>
             </div>
-            <h1>Edit Your Website</h1>
-            <p>Enter your password to access the dashboard</p>
+            <h1>Sign in to your dashboard</h1>
+            <p id="login-blurb">Enter the email you used at sign-up. We&rsquo;ll send you a one-click sign-in link.</p>
             <form id="login-form">
-                <div class="form-group">
-                    <input type="password" id="password" placeholder="Enter password" required autofocus>
+                <div class="form-group" style="margin-bottom: 18px;">
+                    <input type="email" id="email" placeholder="you@example.com" required autofocus autocomplete="email">
                 </div>
                 <button type="submit" class="btn btn-primary btn-full">
-                    Access Dashboard
+                    Email me a sign-in link
                 </button>
             </form>
-            <p id="login-error" class="error-text" style="display: none;">Incorrect password. Please try again.</p>
+            <p id="login-error" class="error-text" style="display: none;"></p>
+            <p id="login-success" class="success-text" style="display: none;">Sign-in link sent. Check your inbox.</p>
+            <p class="login-hint">Trouble? Email <a href="mailto:support@getmeonlinefast.com">support@getmeonlinefast.com</a> with your site URL.</p>
         </div>
     </div>
 
@@ -42,6 +49,37 @@
                 <span class="site-key" id="site-key-display"></span>
             </div>
             <div class="header-right">
+                <!-- Undo/Redo Buttons -->
+                <button id="undo-btn" class="btn btn-ghost btn-icon" title="Undo (Ctrl+Z)" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="1 4 1 10 7 10"/>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                    </svg>
+                </button>
+                <button id="redo-btn" class="btn btn-ghost btn-icon" title="Redo (Ctrl+Shift+Z)" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/>
+                    </svg>
+                </button>
+                <!-- Theme Toggle -->
+                <button id="theme-toggle-btn" class="btn btn-ghost btn-icon" title="Toggle light/dark theme">
+                    <svg class="icon-sun" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <svg class="icon-moon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                </button>
+                <button id="all-fields-toggle" class="btn btn-ghost" type="button" title="Show every field as a form (advanced)">All fields</button>
                 <a href="index.html" target="_blank" class="btn btn-secondary">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
@@ -54,82 +92,225 @@
             </div>
         </header>
 
-        <!-- Main Content - Dynamically Generated from Schema -->
-        <main class="dashboard-main">
-            <div id="content-sections" class="content-sections">
-                <!-- Sections will be generated by JavaScript based on CONFIG.SCHEMA -->
-                <div class="loading-sections">
-                    <p>Loading editor...</p>
-                </div>
-            </div>
-
-            <!-- Agent Readiness Panel -->
-            <div id="agent-readiness-panel" class="agent-readiness-panel" style="display: none;">
-                <div class="ar-header">
-                    <h2>Agent Readiness</h2>
-                    <span id="ar-score" class="ar-score">--</span>
-                </div>
-                <p class="ar-description">How well AI crawlers and agents can understand your site</p>
-                <div id="ar-checklist" class="ar-checklist">
-                    <!-- Populated by JS -->
-                </div>
-
-                <!-- AI Traffic Stats -->
-                <div class="ar-traffic">
-                    <h3>AI Traffic (Last 30 Days)</h3>
-                    <div id="ar-traffic-stats" class="ar-traffic-stats">
-                        <div class="ar-stat">
-                            <span class="ar-stat-value" id="ar-crawlers">0</span>
-                            <span class="ar-stat-label">Crawler Visits</span>
-                        </div>
-                        <div class="ar-stat">
-                            <span class="ar-stat-value" id="ar-referrals">0</span>
-                            <span class="ar-stat-label">AI Referrals</span>
-                        </div>
+        <!-- AI content editor (primary view) — iframe of live site + chat panel -->
+        <main class="ai-editor-main" id="ai-editor-main">
+            <div class="ai-preview-wrap">
+                <div class="ai-preview-toolbar">
+                    <div id="ai-preview-page-tabs" class="ai-preview-page-tabs" hidden></div>
+                    <div class="ai-device-toggle" aria-label="Preview device">
+                        <button type="button" class="ai-device-btn active" data-ai-device="desktop" aria-pressed="true" title="Desktop preview">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                        </button>
+                        <button type="button" class="ai-device-btn" data-ai-device="mobile" aria-pressed="false" title="Mobile preview">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                        </button>
                     </div>
-                    <div id="ar-traffic-sources" class="ar-traffic-sources">
+                </div>
+                <div class="ai-preview-device-shell" id="ai-preview-device-shell">
+                    <iframe id="ai-preview-iframe" class="ai-preview-iframe" title="Live preview" src="index.html?cb=admin"></iframe>
+                </div>
+                <div id="ai-flash" class="ai-flash" hidden></div>
+            </div>
+            <aside class="ai-chat-panel">
+                <div class="ai-chat-header">
+                    <div>
+                        <h2 class="ai-chat-title">AI content editor</h2>
+                        <p class="ai-chat-sub" id="ai-selected-label">Click editable text or images in the preview, or describe a content change below.</p>
+                    </div>
+                    <div class="ai-chat-tools">
+                        <button id="ai-guide-btn" class="btn btn-ghost" type="button" title="Editor guide">Guide</button>
+                        <button id="ai-tools-btn" class="btn btn-ghost" type="button" title="Site tools">Tools</button>
+                        <button id="ai-history-btn" class="btn btn-ghost" type="button" title="Recent changes">History</button>
+                        <button id="ai-clear-selection" class="btn btn-ghost btn-icon" title="Clear selection" hidden>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="revision-drawer" class="revision-drawer" hidden>
+                    <div class="revision-drawer-head">
+                        <strong>Recent changes</strong>
+                        <button type="button" id="revision-refresh-btn">Refresh</button>
+                    </div>
+                    <div id="revision-list" class="revision-list">
+                        <p>Loading changes...</p>
+                    </div>
+                </div>
+                <div id="ai-tools-drawer" class="ai-tools-drawer" hidden>
+                    <div class="ai-tools-drawer-head">
+                        <strong>Site tools</strong>
+                        <button type="button" id="ai-tools-close-btn">Close</button>
+                    </div>
+                    <div id="ai-plugin-panels-host" class="ai-plugin-panels-host"></div>
+                </div>
+                <div id="ai-guide-drawer" class="ai-guide-drawer" hidden>
+                    <div class="ai-guide-drawer-head">
+                        <strong>Guide</strong>
+                        <button type="button" id="ai-guide-close-btn">Close</button>
+                    </div>
+                    <div class="ai-guide-list">
+                        <p>Click editable text or images in the preview, then ask for the change.</p>
+                        <p>Review AI suggestions before Apply. Applied AI changes are saved instantly.</p>
+                        <p>Use History to roll back saved content fields.</p>
+                    </div>
+                </div>
+                <div id="ai-chat-messages" class="ai-chat-messages">
+                    <div class="ai-chat-welcome">
+                        <p>Tell me what content you want to change, in plain English.</p>
+                        <ul>
+                            <li>"Rewrite the hero headline so it sounds warmer"</li>
+                            <li>"Change the main button to <em>Book a call</em>"</li>
+                            <li>"Update the phone number to 0207 123 4567"</li>
+                        </ul>
+                    </div>
+                </div>
+                <form id="ai-chat-form" class="ai-chat-form">
+                    <input type="file" id="ai-image-upload-input" accept="image/*" hidden>
+                    <div id="ai-image-tools" class="ai-image-tools" hidden>
+                        <button type="button" id="ai-image-upload-btn" class="ai-image-tool" title="Upload replacement image">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        </button>
+                        <button type="button" id="ai-image-generate-btn" class="ai-image-tool" title="Generate replacement image">
+                            AI
+                        </button>
+                    </div>
+                    <textarea id="ai-chat-input" class="ai-chat-input" rows="2" placeholder="Describe a change…" autocomplete="off"></textarea>
+                    <button type="submit" class="ai-send-btn" title="Send">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
+                </form>
+            </aside>
+        </main>
+
+        <!-- All-fields form (hidden by default; toggled via header button) -->
+        <main class="dashboard-main" id="dashboard-main" hidden>
+            <!-- Editor Pane -->
+            <div class="editor-pane" id="editor-pane">
+                <!-- Domain Status Section -->
+                <div id="domain-status-section" class="domain-status-section" style="display:none;"></div>
+
+                <!-- Page Tabs (multi-page sites only) -->
+                <div id="page-tabs-bar" class="page-tabs-bar" style="display:none;"></div>
+
+                <!-- Plugin Panels (messages, orders, bookings, etc.) -->
+                <div id="dashboard-plugin-panels-host">
+                    <div id="plugin-panels" class="plugin-panels"></div>
+                </div>
+
+                <div id="content-sections" class="content-sections">
+                    <!-- Sections will be generated by JavaScript based on CONFIG.SCHEMA -->
+                    <div class="loading-sections">
+                        <p>Loading editor...</p>
+                    </div>
+                </div>
+
+                <!-- Google Business Profile Guide -->
+                <div id="gbp-guide-section" class="gbp-guide-section" style="display:none;"></div>
+
+                <!-- Agent Readiness Panel -->
+                <div id="agent-readiness-panel" class="agent-readiness-panel" style="display: none;">
+                    <div class="ar-header">
+                        <h2>Agent Readiness</h2>
+                        <span id="ar-score" class="ar-score">--</span>
+                    </div>
+                    <p class="ar-description">How well AI crawlers and agents can understand your site</p>
+                    <div id="ar-checklist" class="ar-checklist">
                         <!-- Populated by JS -->
                     </div>
-                </div>
 
-                <!-- AI Preview -->
-                <div class="ar-preview">
-                    <h3>How AI Sees Your Site</h3>
-                    <p class="ar-preview-desc">This is the text content AI crawlers extract from your site</p>
-                    <div id="ar-preview-content" class="ar-preview-content">
-                        <p>Loading preview...</p>
+                    <!-- AI Traffic Stats -->
+                    <div class="ar-traffic">
+                        <h3>AI Traffic (Last 30 Days)</h3>
+                        <div id="ar-traffic-stats" class="ar-traffic-stats">
+                            <div class="ar-stat">
+                                <span class="ar-stat-value" id="ar-crawlers">0</span>
+                                <span class="ar-stat-label">Crawler Visits</span>
+                            </div>
+                            <div class="ar-stat">
+                                <span class="ar-stat-value" id="ar-referrals">0</span>
+                                <span class="ar-stat-label">AI Referrals</span>
+                            </div>
+                        </div>
+                        <div id="ar-traffic-sources" class="ar-traffic-sources">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- AI Preview -->
+                    <div class="ar-preview">
+                        <h3>How AI Sees Your Site</h3>
+                        <p class="ar-preview-desc">This is the text content AI crawlers extract from your site</p>
+                        <div id="ar-preview-content" class="ar-preview-content">
+                            <p>Loading preview...</p>
+                        </div>
                     </div>
                 </div>
             </div>
+        </main>
 
-            <!-- Sticky Save Bar -->
-            <div class="save-bar">
-                <div class="save-bar-content">
-                    <span id="save-status" class="save-status saved">
-                        <span class="status-dot"></span>
-                        <span class="status-text">All changes saved</span>
-                    </span>
-                    <button id="save-btn" class="btn btn-primary">
+        <!-- Sticky Save Bar -->
+        <div class="save-bar" id="save-bar">
+            <div class="save-bar-content">
+                <span id="save-status" class="save-status saved">
+                    <span class="status-dot"></span>
+                    <span class="status-text">All changes saved</span>
+                    <span class="status-time" id="save-time"></span>
+                </span>
+                <div class="save-bar-right">
+                    <span id="upload-status" class="upload-status" style="display:none;">(uploading...)</span>
+                    <button id="retry-btn" class="btn btn-secondary btn-sm" style="display:none;">Retry</button>
+                    <span id="save-context-note" class="save-context-note">AI Apply saves instantly. This button saves All fields edits.</span>
+                    <button id="save-btn" class="btn btn-primary" title="Save manual edits made in All fields">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
                             <polyline points="17 21 17 13 7 13 7 21"/>
                             <polyline points="7 3 7 8 15 8"/>
                         </svg>
-                        Save Changes
+                        Save all-fields edits
                     </button>
                 </div>
             </div>
-        </main>
+        </div>
     </div>
 
     <!-- Toast Notification -->
     <div id="toast" class="toast">
         <span class="toast-message"></span>
+        <button class="toast-close" aria-label="Close">&times;</button>
+    </div>
+
+    <!-- Keyboard Shortcuts Help Overlay -->
+    <div id="shortcuts-overlay" class="shortcuts-overlay" style="display:none;">
+        <div class="shortcuts-card">
+            <div class="shortcuts-header">
+                <h2>Keyboard Shortcuts</h2>
+                <button class="shortcuts-close btn btn-ghost btn-icon" id="shortcuts-close-btn">&times;</button>
+            </div>
+            <div class="shortcuts-list">
+                <div class="shortcut-row">
+                    <span class="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>S</kbd></span>
+                    <span class="shortcut-desc">Save changes</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>Z</kbd></span>
+                    <span class="shortcut-desc">Undo</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd></span>
+                    <span class="shortcut-desc">Redo</span>
+                </div>
+                <div class="shortcut-row">
+                    <span class="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>/</kbd></span>
+                    <span class="shortcut-desc">Toggle this help</span>
+                </div>
+            </div>
+            <p class="shortcuts-note">On Mac, use Cmd instead of Ctrl</p>
+        </div>
     </div>
 
     <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1"></script>
     <script src="config.js"></script>
     <script src="admin.js"></script>
+    <script src="admin-plugins.js"></script>
 </body>
 </html>
