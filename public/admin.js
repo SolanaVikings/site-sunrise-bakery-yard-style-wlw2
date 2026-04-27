@@ -619,7 +619,7 @@ function showDashboard() {
     // Load domain status (async, non-blocking)
     setTimeout(loadDomainStatus, 300);
 
-    // Initialise AI content editor (iframe + chat split view)
+    // Initialise AI editor (iframe + chat split view)
     initAiEditor();
     setAdminEditorMode('ai');
     updateAdminHeaderHeight();
@@ -638,7 +638,7 @@ let currentAiPreviewPage = 'index';
 let currentAiPreviewDevice = 'desktop';
 let revisionCache = [];
 
-const AI_DEFAULT_HINT = 'Click editable text or images in the preview, or describe a content change below.';
+const AI_DEFAULT_HINT = 'Click text/images in the preview, or describe a content or design change below.';
 
 function updateAdminHeaderHeight() {
     const header = document.querySelector('.dashboard-header');
@@ -666,7 +666,7 @@ function setAdminEditorMode(mode) {
         else saveBar.setAttribute('hidden', '');
     }
     if (dashboard) dashboard.classList.toggle('is-ai-mode', !showFields);
-    if (toggle) toggle.textContent = showFields ? 'AI content' : 'All fields';
+    if (toggle) toggle.textContent = showFields ? 'AI editor' : 'All fields';
 
     if (showFields) {
         setAiToolsDrawerOpen(false);
@@ -736,7 +736,7 @@ function initAiEditor() {
         revisionRefreshBtn.addEventListener('click', () => loadRevisionHistory());
     }
 
-    // Toggle between AI content editor + all-fields form
+    // Toggle between AI editor + all-fields form
     if (allFieldsBtn) {
         allFieldsBtn.addEventListener('click', () => {
             const ai = document.getElementById('ai-editor-main');
@@ -792,6 +792,7 @@ function initAiEditor() {
         if (!text) return;
         input.value = '';
         input.style.height = 'auto';
+        clearAiDesignPreview();
         appendChatMessage('user', escapeHtml(text));
         const thinking = appendChatMessage('thinking', '\u2728 Thinking\u2026');
         const sendBtn = form.querySelector('button[type="submit"]');
@@ -806,6 +807,7 @@ function initAiEditor() {
                     session_token: sessionToken,
                     prompt: text,
                     selected_key: aiSelectedKey || undefined,
+                    selected_page: currentAiPreviewPage || 'index',
                     plugin_context: getAiPluginContext(),
                 }),
             });
@@ -968,7 +970,7 @@ function clearAiSelection(label) {
     const selectedChipLabel = document.getElementById('ai-selected-chip-label');
     if (selectedChipLabel) selectedChipLabel.textContent = 'No element selected';
     const input = document.getElementById('ai-chat-input');
-    if (input) input.placeholder = 'Describe a change...';
+    if (input) input.placeholder = 'Describe a content or design change...';
 
     const iframe = document.getElementById('ai-preview-iframe');
     try {
@@ -998,7 +1000,7 @@ function setAiSelectionUi(label, selectedKey, isImage, isLayoutOnly) {
     const input = document.getElementById('ai-chat-input');
     if (input) {
         if (isLayoutOnly) {
-            input.placeholder = 'This is layout-only. Click highlighted copy or image inside it to edit content.';
+            input.placeholder = 'Ask for a design change, or click copy/image inside it for content edits.';
         } else if (aiSelectedIsImage) {
             input.placeholder = 'Replace this image, or describe the image change...';
         } else {
@@ -1319,7 +1321,7 @@ function injectAiClickHandlers(iframe) {
                 rawTarget.classList.add('__ai-selected');
                 setAiSelectionUi('Layout selected: ' + getReadableElementLabel(rawTarget) + '. Published sites can edit saved copy/images only.', null, false, true);
             } else {
-                clearAiSelection('That part is layout/design. This dashboard edits saved content fields.');
+                clearAiSelection('That part is layout/design. Ask for a design change, or click saved copy/images for content edits.');
             }
             return;
         }
@@ -1360,48 +1362,90 @@ function appendChatMessage(role, html) {
     return div;
 }
 
+function getAiDesignPreviewCss(designChanges) {
+    if (!Array.isArray(designChanges) || designChanges.length === 0) return '';
+    return designChanges
+        .map(change => change && typeof change.css === 'string' ? change.css.trim() : '')
+        .filter(Boolean)
+        .join('\n\n');
+}
+
+function clearAiDesignPreview() {
+    const iframe = document.getElementById('ai-preview-iframe');
+    try {
+        const doc = iframe && iframe.contentDocument;
+        const existing = doc && doc.getElementById('__ai-design-preview');
+        if (existing) existing.remove();
+    } catch (_) {}
+}
+
+function previewAiDesignChanges(designChanges) {
+    const css = getAiDesignPreviewCss(designChanges);
+    if (!css) return;
+    const iframe = document.getElementById('ai-preview-iframe');
+    try {
+        const doc = iframe && iframe.contentDocument;
+        if (!doc || !doc.head) return;
+        clearAiDesignPreview();
+        const style = doc.createElement('style');
+        style.id = '__ai-design-preview';
+        style.textContent = css;
+        doc.head.appendChild(style);
+    } catch (_) {}
+}
+
 function renderAiResponse(data) {
     const message = data && data.message ? data.message : 'Done.';
     const changes = (data && Array.isArray(data.changes)) ? data.changes : [];
+    const designChanges = (data && Array.isArray(data.design_changes)) ? data.design_changes : [];
     let html = escapeHtml(message);
-    if (changes.length > 0) {
+    if (changes.length > 0 || designChanges.length > 0) {
         html += '<div style="margin-top:10px;">';
         changes.forEach(c => {
             html += '<span class="ai-change-pill pending">' + escapeHtml(c.label || c.key) + '</span>';
         });
+        designChanges.forEach(c => {
+            html += '<span class="ai-change-pill pending">' + escapeHtml(c.label || 'Design update') + '</span>';
+        });
         html += '</div>';
         html += '<div class="ai-chat-actions">';
-        html += '<button type="button" class="primary" data-ai-apply="1">Apply ' + (changes.length === 1 ? 'change' : 'all') + '</button>';
+        const total = changes.length + designChanges.length;
+        html += '<button type="button" class="primary" data-ai-apply="1">Apply ' + (total === 1 ? 'change' : 'all') + '</button>';
         html += '<button type="button" data-ai-discard="1">Discard</button>';
         html += '</div>';
     }
     const msgEl = appendChatMessage('assistant', html);
 
-    if (changes.length > 0) {
-        msgEl.querySelector('[data-ai-apply]').addEventListener('click', () => applyAiChanges(changes, msgEl));
+    if (designChanges.length > 0) {
+        previewAiDesignChanges(designChanges);
+    }
+
+    if (changes.length > 0 || designChanges.length > 0) {
+        msgEl.querySelector('[data-ai-apply]').addEventListener('click', () => applyAiChanges(changes, msgEl, designChanges));
         msgEl.querySelector('[data-ai-discard]').addEventListener('click', () => {
             msgEl.querySelector('.ai-chat-actions').remove();
             msgEl.querySelectorAll('.ai-change-pill').forEach(p => { p.style.opacity = '0.5'; p.textContent = '\u2717 ' + p.textContent; });
+            if (designChanges.length > 0) clearAiDesignPreview();
             persistAiChatHistory();
         });
     }
 }
 
-async function applyAiChanges(changes, msgEl) {
+async function applyAiChanges(changes, msgEl, designChanges) {
+    changes = Array.isArray(changes) ? changes : [];
+    designChanges = Array.isArray(designChanges) ? designChanges : [];
     const actions = msgEl.querySelector('.ai-chat-actions');
     if (actions) {
         const buttons = actions.querySelectorAll('button');
         buttons.forEach(b => b.disabled = true);
-        actions.querySelector('.primary').textContent = 'Saving\u2026';
+        actions.querySelector('.primary').textContent = designChanges.length ? 'Publishing\u2026' : 'Saving\u2026';
     }
-
-    const iframe = document.getElementById('ai-preview-iframe');
-    const idoc = iframe ? iframe.contentDocument : null;
 
     let saved = 0;
     let failed = 0;
     const results = [];
     const revisions = [];
+    const publishedDesignChanges = [];
     for (const change of changes) {
         const dotIdx = change.key.indexOf('.');
         if (dotIdx < 0) {
@@ -1460,6 +1504,20 @@ async function applyAiChanges(changes, msgEl) {
     }
     if (revisions.length) await recordContentRevisions(revisions);
 
+    for (const change of designChanges) {
+        try {
+            await applyAiDesignChange(change);
+            publishedDesignChanges.push(change);
+            saved++;
+            results.push(true);
+        } catch (e) {
+            console.error('Design save error:', e);
+            failed++;
+            results.push(false);
+        }
+    }
+    if (publishedDesignChanges.length > 0) previewAiDesignChanges(publishedDesignChanges);
+
     if (actions) actions.remove();
     msgEl.querySelectorAll('.ai-change-pill').forEach((p, idx) => {
         p.classList.remove('pending');
@@ -1478,20 +1536,47 @@ async function applyAiChanges(changes, msgEl) {
     } else {
         const note = document.createElement('div');
         note.style.cssText = 'margin-top:6px;font-size:12px;color:#2C6E3F;';
-        note.textContent = 'Saved \u2014 visible on your site instantly.';
+        note.textContent = designChanges.length
+            ? 'Saved — design publish started. It may take about a minute to appear on the live site.'
+            : 'Saved — visible on your site instantly.';
         msgEl.appendChild(note);
     }
     if (saved > 0) {
         lastSaveTime = Date.now();
         updateSaveTimeDisplay();
         if (!hasUnsavedChanges) updateSaveStatus('saved');
-        showToast(saved === 1 ? 'AI change saved' : saved + ' AI changes saved', 'success');
+        showToast(designChanges.length ? 'AI design update publishing' : (saved === 1 ? 'AI change saved' : saved + ' AI changes saved'), 'success');
     }
     // Clear selection after a successful apply
     if (saved > 0) {
         clearAiSelection(AI_DEFAULT_HINT);
     }
     persistAiChatHistory();
+}
+
+async function applyAiDesignChange(change) {
+    if (!CONFIG.SUPABASE_URL || !sessionToken) {
+        throw new Error('Sign in again before publishing design changes');
+    }
+    const css = change && typeof change.css === 'string' ? change.css.trim() : '';
+    if (!css) throw new Error('Design change is empty');
+
+    const res = await fetch(CONFIG.SUPABASE_URL + '/functions/v1/admin-edit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CONFIG.SUPABASE_ANON_KEY },
+        body: JSON.stringify({
+            action: 'apply_design',
+            site_key: CONFIG.SITE_KEY,
+            session_token: sessionToken,
+            css_append: css,
+            label: change.label || 'Design update',
+        }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) {
+        throw new Error(data.error || ('Design publish failed with status ' + res.status));
+    }
+    return data;
 }
 
 async function recordContentRevisions(revisions) {
