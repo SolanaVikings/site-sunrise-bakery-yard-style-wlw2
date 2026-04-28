@@ -46,9 +46,17 @@
         <header class="dashboard-header">
             <div class="header-left">
                 <h1>Website Dashboard</h1>
-                <span class="site-key" id="site-key-display"></span>
             </div>
             <div class="header-right">
+                <!-- Device Toggle (preview desktop/mobile) -->
+                <div class="ai-device-toggle" aria-label="Preview device">
+                    <button type="button" class="ai-device-btn active" data-ai-device="desktop" aria-pressed="true" title="Desktop preview">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                    </button>
+                    <button type="button" class="ai-device-btn" data-ai-device="mobile" aria-pressed="false" title="Mobile preview">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+                    </button>
+                </div>
                 <!-- Undo/Redo Buttons -->
                 <button id="undo-btn" class="btn btn-ghost btn-icon" title="Undo (Ctrl+Z)" disabled>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -61,6 +69,10 @@
                         <polyline points="23 4 23 10 17 10"/>
                         <path d="M20.49 15a9 9 0 1 1-2.13-9.36L23 10"/>
                     </svg>
+                </button>
+                <!-- Chat Panel Toggle -->
+                <button id="chat-toggle-btn" class="btn btn-ghost btn-icon" title="Hide AI chat" aria-pressed="false">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
                 </button>
                 <!-- Theme Toggle -->
                 <button id="theme-toggle-btn" class="btn btn-ghost btn-icon" title="Toggle light/dark theme">
@@ -95,44 +107,27 @@
         <!-- AI editor (primary view) — iframe of live site + chat panel -->
         <main class="ai-editor-main" id="ai-editor-main">
             <div class="ai-preview-wrap">
-                <div class="ai-preview-toolbar">
-                    <div class="ai-preview-chrome">
-                        <div class="ai-preview-dots" aria-hidden="true">
-                            <span class="ai-preview-dot dot-red"></span>
-                            <span class="ai-preview-dot dot-yellow"></span>
-                            <span class="ai-preview-dot dot-green"></span>
-                        </div>
-                        <div class="ai-preview-url" id="ai-preview-url">your-site.onrender.com</div>
-                    </div>
-                    <div id="ai-preview-page-tabs" class="ai-preview-page-tabs" hidden></div>
-                    <div class="ai-device-toggle" aria-label="Preview device">
-                        <button type="button" class="ai-device-btn active" data-ai-device="desktop" aria-pressed="true" title="Desktop preview">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                        </button>
-                        <button type="button" class="ai-device-btn" data-ai-device="mobile" aria-pressed="false" title="Mobile preview">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-                        </button>
-                    </div>
-                </div>
+                <div id="ai-preview-page-tabs" class="ai-preview-page-tabs" hidden></div>
                 <div class="ai-preview-device-shell" id="ai-preview-device-shell">
                     <iframe id="ai-preview-iframe" class="ai-preview-iframe" title="Live preview" src="index.html?cb=admin"></iframe>
                 </div>
                 <div id="ai-flash" class="ai-flash" hidden></div>
+                <button id="chat-reopen-tab" class="chat-reopen-tab" type="button" title="Show AI chat" aria-label="Show AI chat">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
             </div>
             <aside class="ai-chat-panel">
                 <div class="ai-chat-header">
-                    <div class="ai-chat-header-top">
-                        <div class="ai-chat-heading">
-                            <h2 class="ai-chat-title">AI editor</h2>
-                        </div>
-                        <div class="ai-chat-tools">
-                            <button id="ai-guide-btn" class="btn btn-ghost" type="button" title="Editor guide" aria-expanded="false">Guide</button>
-                            <button id="ai-tools-btn" class="btn btn-ghost" type="button" title="Site tools" aria-expanded="false">Tools</button>
-                            <button id="ai-history-btn" class="btn btn-ghost" type="button" title="Recent changes" aria-expanded="false">History</button>
-                            <button id="ai-clear-selection" class="btn btn-ghost btn-icon" title="Clear selection" hidden>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                            </button>
-                        </div>
+                    <div class="ai-chat-tools">
+                        <button id="ai-guide-btn" class="btn btn-ghost" type="button" title="Editor guide" aria-expanded="false">Guide</button>
+                        <button id="ai-tools-btn" class="btn btn-ghost" type="button" title="Site tools" aria-expanded="false">Tools</button>
+                        <button id="ai-history-btn" class="btn btn-ghost" type="button" title="Recent changes" aria-expanded="false">History</button>
+                        <button id="ai-clear-selection" class="btn btn-ghost btn-icon" title="Clear selection" hidden>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </button>
+                        <button id="ai-panel-collapse-btn" class="btn btn-ghost btn-icon" type="button" title="Hide AI editor panel" aria-label="Hide AI editor panel">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                        </button>
                     </div>
                     <p class="ai-chat-sub" id="ai-selected-label">Select text or an image, or type a content/design request.</p>
                 </div>
@@ -160,7 +155,8 @@
                     <div class="ai-guide-list">
                         <p>Click text or images in the preview, then ask for copy, image, or design changes.</p>
                         <p>Review AI suggestions before Apply. Content saves instantly; design changes publish to the live site.</p>
-                        <p>Use History to roll back saved content fields.</p>
+                        <p>Use History to roll back saved content fields or reverted design changes.</p>
+                        <p>Undo or revert of a design change re-publishes the site &mdash; about 60 seconds before it goes live.</p>
                     </div>
                 </div>
                 <div id="ai-chat-messages" class="ai-chat-messages">

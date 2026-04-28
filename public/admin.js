@@ -153,24 +153,57 @@ function updateAiPreviewField(key, value, shouldFlash) {
     });
 }
 
-function pushToHistory(section, field, oldValue, newValue) {
-    if (oldValue === newValue) return;
+function pushToHistory(section, field, oldValue, newValue, type) {
+    type = type || 'content';
+    // The equality short-circuit only makes sense for primitive content
+    // edits — design entries always carry an object payload, and even an
+    // identical-looking object is a fresh change to record.
+    if (type === 'content' && oldValue === newValue) return;
 
     // Truncate any redo entries beyond current index
     if (historyIndex < changeHistory.length - 1) {
         changeHistory = changeHistory.slice(0, historyIndex + 1);
     }
 
-    changeHistory.push({ section, field, oldValue, newValue });
+    changeHistory.push({ section, field, oldValue, newValue, type });
     historyIndex = changeHistory.length - 1;
     updateUndoRedoButtons();
 }
 
-function performUndo() {
+async function performUndo() {
     if (historyIndex < 0) return;
 
     const entry = changeHistory[historyIndex];
     historyIndex--;
+
+    if (entry.type === 'design') {
+        const stamp = entry.newValue && entry.newValue.stamp;
+        if (!stamp) {
+            historyIndex++;
+            updateUndoRedoButtons();
+            return;
+        }
+        try {
+            const res = await fetch(CONFIG.SUPABASE_URL + '/functions/v1/admin-edit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CONFIG.SUPABASE_ANON_KEY },
+                body: JSON.stringify({
+                    action: 'revert_design',
+                    site_key: CONFIG.SITE_KEY,
+                    session_token: sessionToken,
+                    stamp: stamp,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.error) throw new Error(data.error || 'Revert failed');
+            showToast('Reverting design — publishing in ~60s', 'info');
+        } catch (e) {
+            historyIndex++; // restore index since we couldn't revert
+            showToast('Could not revert design: ' + (e && e.message ? e.message : e), 'error');
+        }
+        updateUndoRedoButtons();
+        return;
+    }
 
     const el = getFieldControl(entry.section, entry.field);
     if (el) {
@@ -196,11 +229,38 @@ function performUndo() {
     updatePreview();
 }
 
-function performRedo() {
+async function performRedo() {
     if (historyIndex >= changeHistory.length - 1) return;
 
     historyIndex++;
     const entry = changeHistory[historyIndex];
+
+    if (entry.type === 'design') {
+        try {
+            const res = await fetch(CONFIG.SUPABASE_URL + '/functions/v1/admin-edit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CONFIG.SUPABASE_ANON_KEY },
+                body: JSON.stringify({
+                    action: 'apply_design',
+                    site_key: CONFIG.SITE_KEY,
+                    session_token: sessionToken,
+                    css_append: entry.newValue && entry.newValue.css,
+                    label: entry.newValue && entry.newValue.label,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.error) throw new Error(data.error || 'Re-publish failed');
+            // The server stamps a fresh timestamp on re-apply — capture it
+            // so the next undo can revert this exact stamped block.
+            if (entry.newValue) entry.newValue.stamp = data.stamp || entry.newValue.stamp;
+            showToast('Re-publishing design — about a minute', 'info');
+        } catch (e) {
+            historyIndex--;
+            showToast('Could not redo design: ' + (e && e.message ? e.message : e), 'error');
+        }
+        updateUndoRedoButtons();
+        return;
+    }
 
     const el = getFieldControl(entry.section, entry.field);
     if (el) {
@@ -242,8 +302,8 @@ async function handleError(error, context) {
         // Trigger re-login after short delay
         setTimeout(() => {
             sessionToken = null;
-            sessionStorage.removeItem('authenticated');
-            sessionStorage.removeItem('session_token');
+            localStorage.removeItem('authenticated');
+            localStorage.removeItem('session_token');
             isAuthenticated = false;
             loginScreen.style.display = 'flex';
             dashboard.style.display = 'none';
@@ -431,8 +491,8 @@ logoutBtn.addEventListener('click', async () => {
     }
 
     sessionToken = null;
-    sessionStorage.removeItem('authenticated');
-    sessionStorage.removeItem('session_token');
+    localStorage.removeItem('authenticated');
+    localStorage.removeItem('session_token');
     isAuthenticated = false;
     loginScreen.style.display = 'flex';
     dashboard.style.display = 'none';
@@ -441,12 +501,12 @@ logoutBtn.addEventListener('click', async () => {
 
 // Check for existing session or Supabase SSO
 const hasUrlToken = window.location.hash && window.location.hash.startsWith('#token=');
-const storedToken = sessionStorage.getItem('session_token');
+const storedToken = localStorage.getItem('session_token');
 
 if (hasUrlToken) {
     // URL token takes priority — skip stored token validation
     checkTokenLogin();
-} else if (sessionStorage.getItem('authenticated') === 'true' && storedToken && supabaseClient) {
+} else if (localStorage.getItem('authenticated') === 'true' && storedToken && supabaseClient) {
     // Validate stored token server-side via RPC
     (async () => {
         try {
@@ -454,8 +514,8 @@ if (hasUrlToken) {
 
             if (error || !data || data !== CONFIG.SITE_KEY) {
                 // Token expired, invalid, or belongs to different site
-                sessionStorage.removeItem('session_token');
-                sessionStorage.removeItem('authenticated');
+                localStorage.removeItem('session_token');
+                localStorage.removeItem('authenticated');
                 checkSupabaseSession();
                 return;
             }
@@ -468,8 +528,8 @@ if (hasUrlToken) {
             });
             showDashboard();
         } catch (err) {
-            sessionStorage.removeItem('session_token');
-            sessionStorage.removeItem('authenticated');
+            localStorage.removeItem('session_token');
+            localStorage.removeItem('authenticated');
             checkSupabaseSession();
         }
     })();
@@ -507,8 +567,9 @@ async function checkSupabaseSession() {
 
                     if (loginData && loginData.length && loginData[0].token) {
                         sessionToken = loginData[0].token;
-                        sessionStorage.setItem('session_token', sessionToken);
-                        sessionStorage.setItem('authenticated', 'true');
+                        localStorage.setItem('session_token', sessionToken);
+                        localStorage.setItem('authenticated', 'true');
+                        clearAiChatHistory();
 
                         // Recreate client with session token
                         supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
@@ -577,10 +638,12 @@ async function checkTokenLogin() {
             return;
         }
 
-        // Token valid — promote it to session
+        // Token valid — promote it to session. Wipe last session's chat
+        // transcript so each login starts with an empty AI editor.
         sessionToken = token;
-        sessionStorage.setItem('session_token', sessionToken);
-        sessionStorage.setItem('authenticated', 'true');
+        localStorage.setItem('session_token', sessionToken);
+        localStorage.setItem('authenticated', 'true');
+        clearAiChatHistory();
         supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
             global: { headers: { 'x-site-token': sessionToken } }
         });
@@ -595,7 +658,7 @@ async function checkTokenLogin() {
 function showDashboard() {
     loginScreen.style.display = 'none';
     dashboard.style.display = 'flex';
-    siteKeyDisplay.textContent = CONFIG.SITE_KEY;
+    if (siteKeyDisplay) siteKeyDisplay.textContent = CONFIG.SITE_KEY + '.onrender.com';
 
     // Generate form from schema
     generateFormFromSchema();
@@ -702,6 +765,7 @@ function initAiEditor() {
     if (!iframe || !form) return;
 
     initAiPreviewControls();
+    initChatPanelToggle();
     initAiImageTools();
     restoreAiChatHistory();
     updateAiChatHeaderHeight();
@@ -815,6 +879,7 @@ function initAiEditor() {
                     selected_key: aiSelectedKey || undefined,
                     selected_page: currentAiPreviewPage || 'index',
                     plugin_context: getAiPluginContext(),
+                    available_content: gatherAvailableContent(),
                 }),
             });
             const data = await res.json().catch(() => ({}));
@@ -835,6 +900,34 @@ function initAiEditor() {
             sendBtn.disabled = false;
         }
     });
+}
+
+function gatherAvailableContent() {
+    const map = {};
+    if (typeof CONFIG !== 'undefined' && Array.isArray(CONFIG.SCHEMA)) {
+        CONFIG.SCHEMA.forEach(section => {
+            (section.fields || []).forEach(f => {
+                map[section.id + '.' + f.id] = '';
+            });
+        });
+    }
+    const iframe = document.getElementById('ai-preview-iframe');
+    let doc = null;
+    try { doc = iframe && iframe.contentDocument; } catch (_) {}
+    if (doc) {
+        doc.querySelectorAll('[data-content]').forEach(el => {
+            const key = el.getAttribute('data-content');
+            if (!key) return;
+            const value = el.tagName === 'IMG'
+                ? (el.getAttribute('src') || '')
+                : (el.textContent || '').trim();
+            if (value) map[key] = value;
+        });
+    }
+    Object.keys(contentCache || {}).forEach(k => {
+        if (contentCache[k]) map[k] = contentCache[k];
+    });
+    return map;
 }
 
 function getAiPluginContext() {
@@ -965,6 +1058,10 @@ function restoreAiChatHistory() {
         container.appendChild(div);
     });
     container.scrollTop = container.scrollHeight;
+}
+
+function clearAiChatHistory() {
+    try { localStorage.removeItem(aiChatHistoryKey()); } catch (_) {}
 }
 
 function persistAiChatHistory() {
@@ -1288,12 +1385,54 @@ async function applyAiFieldChange(key, value, label, source) {
     return { key, value: nextValue, label: label || key };
 }
 
-function initAiPreviewControls() {
-    const urlBar = document.getElementById('ai-preview-url');
-    if (urlBar && typeof CONFIG !== 'undefined' && CONFIG.SITE_KEY) {
-        urlBar.textContent = CONFIG.SITE_KEY + '.onrender.com';
+// Persist + restore the right-rail collapse state.
+// Toggle button lives in the dashboard header; a small chevron tab on the
+// right edge of the preview re-opens the panel when collapsed.
+function initChatPanelToggle() {
+    const toggleBtn = document.getElementById('chat-toggle-btn');
+    const reopenTab = document.getElementById('chat-reopen-tab');
+    const stored = localStorage.getItem('ai-chat-collapsed') === '1';
+
+    function applyState(collapsed) {
+        document.body.classList.toggle('chat-collapsed', !!collapsed);
+        if (toggleBtn) {
+            toggleBtn.setAttribute('aria-pressed', collapsed ? 'true' : 'false');
+            toggleBtn.title = collapsed ? 'Show AI chat' : 'Hide AI chat';
+            // Flip the chevron: › when collapsed (open), ‹ when expanded (close)
+            const svg = toggleBtn.querySelector('svg');
+            if (svg) {
+                svg.style.transform = collapsed ? 'rotate(180deg)' : '';
+                svg.style.transition = 'transform 200ms ease';
+            }
+        }
+        // Iframe layout shifts when the column changes width; nudge any
+        // dependent calculations.
+        try { updateAiChatHeaderHeight(); } catch (_) {}
     }
 
+    function setCollapsed(collapsed) {
+        try { localStorage.setItem('ai-chat-collapsed', collapsed ? '1' : '0'); } catch (_) {}
+        applyState(collapsed);
+    }
+
+    applyState(stored);
+
+    if (toggleBtn) {
+        toggleBtn.addEventListener('click', () => {
+            const isCollapsed = document.body.classList.contains('chat-collapsed');
+            setCollapsed(!isCollapsed);
+        });
+    }
+    if (reopenTab) {
+        reopenTab.addEventListener('click', () => setCollapsed(false));
+    }
+    const panelCollapseBtn = document.getElementById('ai-panel-collapse-btn');
+    if (panelCollapseBtn) {
+        panelCollapseBtn.addEventListener('click', () => setCollapsed(true));
+    }
+}
+
+function initAiPreviewControls() {
     const tabs = document.getElementById('ai-preview-page-tabs');
     const deviceButtons = document.querySelectorAll('[data-ai-device]');
     if (tabs && CONFIG.PAGES && CONFIG.PAGES.length > 1) {
@@ -1357,6 +1496,45 @@ function resolveAiClickTarget(rawTarget, doc) {
     return (node && node.nodeType === 1) ? node : rawTarget;
 }
 
+function showAdminLinkToast(headline, hint, pulsePageTabs) {
+    const existing = document.getElementById('link-intercept-toast');
+    if (existing) existing.remove();
+    const toast = document.createElement('div');
+    toast.id = 'link-intercept-toast';
+    toast.setAttribute('role', 'status');
+    toast.innerHTML = '<strong style="display:block;margin-bottom:4px;">' + headline + '</strong>' +
+                      '<span style="opacity:0.85;">' + hint + '</span>';
+    toast.style.cssText = [
+        'position:fixed', 'top:90px', 'left:50%', 'transform:translateX(-50%)',
+        'background:#121417', 'color:#F4EEDE', 'padding:14px 20px',
+        'border-radius:8px', 'font-size:13px', 'line-height:1.5',
+        'z-index:99999', 'box-shadow:0 12px 40px rgba(0,0,0,0.35)',
+        'max-width:420px', 'text-align:center',
+        'font-family:Inter,system-ui,-apple-system,sans-serif',
+        'opacity:0', 'transition:opacity 200ms ease',
+        'pointer-events:none'
+    ].join(';');
+    document.body.appendChild(toast);
+    requestAnimationFrame(() => { toast.style.opacity = '1'; });
+
+    if (pulsePageTabs) {
+        const tabs = document.getElementById('ai-preview-page-tabs');
+        if (tabs && !tabs.hidden && tabs.offsetParent !== null) {
+            const prev = tabs.style.cssText;
+            tabs.style.transition = 'transform 220ms ease, box-shadow 220ms ease';
+            tabs.style.transform = 'scale(1.06)';
+            tabs.style.boxShadow = '0 0 0 4px rgba(230,58,31,0.4), 0 6px 18px rgba(230,58,31,0.25)';
+            tabs.style.borderRadius = '6px';
+            setTimeout(() => { tabs.style.cssText = prev; }, 1500);
+        }
+    }
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 220);
+    }, 3500);
+}
+
 function injectAiClickHandlers(iframe) {
     let doc;
     try { doc = iframe.contentDocument; } catch (e) { return; }
@@ -1364,29 +1542,84 @@ function injectAiClickHandlers(iframe) {
     if (doc.__aiHandlersAttached) return;
     doc.__aiHandlersAttached = true;
 
-    // Inject hover/select highlight CSS into the iframe
+    // Inject hover/select highlight CSS into the iframe.
+    // No persistent outlines — only show on hover or selection so the preview
+    // looks like the live site at rest.
     const style = doc.createElement('style');
     style.textContent =
         '[data-content]{cursor:crosshair!important;}' +
-        '[data-content].__ai-editable{outline:1px solid rgba(201,68,43,.18)!important;outline-offset:2px!important;}' +
+        '[data-content][contenteditable="true"]{cursor:text!important;outline:3px solid #C9442B!important;outline-offset:3px!important;background:rgba(201,68,43,0.07)!important;}' +
         '.__ai-hover{outline:2px dashed #C9442B!important;outline-offset:3px!important;cursor:crosshair!important;}' +
         '.__ai-selected{outline:3px solid #C9442B!important;outline-offset:3px!important;background:rgba(201,68,43,0.07)!important;}';
     doc.head.appendChild(style);
-    doc.querySelectorAll('[data-content]').forEach(el => el.classList.add('__ai-editable'));
 
     let lastHover = null;
+    const clearHover = () => {
+        if (lastHover) { lastHover.classList.remove('__ai-hover'); lastHover = null; }
+        doc.querySelectorAll('.__ai-hover').forEach(el => el.classList.remove('__ai-hover'));
+    };
     doc.addEventListener('mouseover', (e) => {
         const target = findEditableTarget(resolveAiClickTarget(e.target, doc));
         if (lastHover && lastHover !== target) lastHover.classList.remove('__ai-hover');
         if (target) { target.classList.add('__ai-hover'); lastHover = target; }
+        else if (lastHover) { lastHover.classList.remove('__ai-hover'); lastHover = null; }
     }, true);
-    doc.addEventListener('mouseout', () => { if (lastHover) lastHover.classList.remove('__ai-hover'); }, true);
+    doc.addEventListener('mouseout', (e) => {
+        // Only clear if the cursor left the previously hovered element. When
+        // moving INTO another editable, the matching mouseover will paint it.
+        if (lastHover && (!e.relatedTarget || !lastHover.contains(e.relatedTarget))) {
+            lastHover.classList.remove('__ai-hover');
+            lastHover = null;
+        }
+    }, true);
+    // If the cursor leaves the iframe entirely (e.g. into the chat panel) the
+    // mouseout above may not fire — clear via mouseleave on doc + body.
+    doc.documentElement.addEventListener('mouseleave', clearHover);
+    if (doc.body) doc.body.addEventListener('mouseleave', clearHover);
     doc.addEventListener('click', (e) => {
+        // If the user clicked a field that's already in edit mode, let the
+        // browser handle it (caret placement, text selection, drag).
+        const editingNow = e.target && e.target.closest && e.target.closest('[data-content][contenteditable="true"]');
+        if (editingNow) return;
+
         e.preventDefault();
         e.stopPropagation();
+
+        // Link intercept: clicks on <a> inside the editor iframe must NOT
+        // navigate. Show a friendly toast pointing to the page tabs when
+        // it's a page-link, otherwise explain links are preview-only.
+        const anchor = e.target && e.target.closest ? e.target.closest('a') : null;
+        if (anchor) {
+            const href = (anchor.getAttribute('href') || '').trim();
+            if (href && href !== '#') {
+                const isPageLink = /(?:^|\/)([\w-]+)\.html(?:[?#]|$)/i.test(href);
+                if (isPageLink) {
+                    showAdminLinkToast(
+                        'You\u2019re in the AI editor — links don\u2019t navigate here.',
+                        'To switch pages, use the page tabs above the preview.',
+                        true
+                    );
+                } else {
+                    const label = /^mailto:/i.test(href) ? 'email link'
+                                : /^tel:/i.test(href) ? 'phone link'
+                                : /^https?:/i.test(href) ? 'external link'
+                                : 'link';
+                    showAdminLinkToast(
+                        'You\u2019re in the AI editor — ' + label + 's are disabled here.',
+                        'Visitors will be able to use this on your live site.',
+                        false
+                    );
+                }
+                return;
+            }
+        }
         const rawTarget = resolveAiClickTarget(e.target, doc);
         const target = findEditableTarget(rawTarget);
 
+        // Tear down any previous inline editor first
+        doc.querySelectorAll('[data-content][contenteditable="true"]').forEach(el => {
+            if (el !== target) el.blur();
+        });
         doc.querySelectorAll('.__ai-selected').forEach(el => el.classList.remove('__ai-selected'));
 
         if (!target) {
@@ -1406,8 +1639,76 @@ function injectAiClickHandlers(iframe) {
         const isImage = target.tagName === 'IMG' || looksLikeImageField(key);
         const fieldText = (target.textContent || target.alt || '').trim().replace(/\s+/g, ' ').slice(0, 60);
         const fieldPreview = isImage ? 'image field' : (fieldText ? '"' + fieldText + '"' : 'content field');
-        setAiSelectionUi('Editing: ' + key + ' - ' + fieldPreview, key, isImage, false);
+
+        if (isImage) {
+            setAiSelectionUi('Editing: ' + key + ' - ' + fieldPreview, key, true, false);
+            return;
+        }
+
+        // Text field: turn it into an inline editor. Skip the AI chat UI —
+        // no chip, no placeholder change, no focus theft. Pure click-to-edit.
+        startInlineEdit(target, key, e.clientX, e.clientY);
     }, true);
+}
+
+function startInlineEdit(target, key, caretX, caretY) {
+    const doc = target.ownerDocument;
+    const originalText = target.textContent || '';
+    target.dataset.aiOriginalText = originalText;
+    target.setAttribute('contenteditable', 'true');
+    target.focus();
+
+    // Drop caret where the user clicked (best effort).
+    try {
+        const sel = doc.getSelection();
+        const range = doc.caretRangeFromPoint
+            ? doc.caretRangeFromPoint(caretX, caretY)
+            : (doc.caretPositionFromPoint
+                ? (() => { const p = doc.caretPositionFromPoint(caretX, caretY); if (!p) return null; const r = doc.createRange(); r.setStart(p.offsetNode, p.offset); r.collapse(true); return r; })()
+                : null);
+        if (range && sel) { sel.removeAllRanges(); sel.addRange(range); }
+    } catch (_) {}
+
+    let cancelled = false;
+    const cleanup = () => {
+        target.removeAttribute('contenteditable');
+        target.classList.remove('__ai-selected');
+        target.removeEventListener('blur', onBlur);
+        target.removeEventListener('keydown', onKeydown);
+        target.removeEventListener('paste', onPaste);
+        delete target.dataset.aiOriginalText;
+    };
+    const onBlur = async () => {
+        const newText = (target.textContent || '').trim();
+        if (cancelled || newText === (originalText || '').trim()) { cleanup(); return; }
+        cleanup();
+        try {
+            await applyAiFieldChange(key, newText, key, 'manual');
+        } catch (err) {
+            target.textContent = originalText;
+            showToast('Could not save: ' + (err && err.message ? err.message : err), 'error');
+        }
+    };
+    const onKeydown = (ev) => {
+        if (ev.key === 'Enter' && !ev.shiftKey) {
+            ev.preventDefault();
+            target.blur();
+        } else if (ev.key === 'Escape') {
+            ev.preventDefault();
+            cancelled = true;
+            target.textContent = originalText;
+            target.blur();
+        }
+    };
+    const onPaste = (ev) => {
+        // Paste plain text only — keep the field free of weird HTML.
+        ev.preventDefault();
+        const text = (ev.clipboardData || window.clipboardData).getData('text/plain');
+        doc.execCommand('insertText', false, text);
+    };
+    target.addEventListener('blur', onBlur);
+    target.addEventListener('keydown', onKeydown);
+    target.addEventListener('paste', onPaste);
 }
 
 function findEditableTarget(start) {
@@ -1514,11 +1815,6 @@ function renderAiResponse(data) {
             html += '<span class="ai-change-pill pending">' + escapeHtml(c.label || 'Design update') + '</span>';
         });
         html += '</div>';
-        html += '<div class="ai-chat-actions">';
-        const total = changes.length + designChanges.length;
-        html += '<button type="button" class="primary" data-ai-apply="1">Apply ' + (total === 1 ? 'change' : 'all') + '</button>';
-        html += '<button type="button" data-ai-discard="1">Discard</button>';
-        html += '</div>';
     }
     const msgEl = appendChatMessage('assistant', html);
 
@@ -1526,14 +1822,10 @@ function renderAiResponse(data) {
         previewAiDesignChanges(designChanges);
     }
 
+    // Auto-apply: skip the Apply/Discard buttons and commit immediately. Undo
+    // (top-bar) and the History drawer are the way to back out a change.
     if (changes.length > 0 || designChanges.length > 0) {
-        msgEl.querySelector('[data-ai-apply]').addEventListener('click', () => applyAiChanges(changes, msgEl, designChanges));
-        msgEl.querySelector('[data-ai-discard]').addEventListener('click', () => {
-            msgEl.querySelector('.ai-chat-actions').remove();
-            msgEl.querySelectorAll('.ai-change-pill').forEach(p => { p.style.opacity = '0.5'; p.textContent = '\u2717 ' + p.textContent; });
-            if (designChanges.length > 0) clearAiDesignPreview();
-            persistAiChatHistory();
-        });
+        applyAiChanges(changes, msgEl, designChanges);
     }
 }
 
@@ -1612,10 +1904,37 @@ async function applyAiChanges(changes, msgEl, designChanges) {
 
     for (const change of designChanges) {
         try {
-            await applyAiDesignChange(change);
+            const result = await applyAiDesignChange(change);
             publishedDesignChanges.push(change);
             saved++;
             results.push(true);
+
+            // Stitch the published design into the unified Undo + History
+            // so users can revert it like any other change. The server
+            // returns a `stamp` ISO string identifying the appended CSS
+            // block; without it we can't revert deterministically.
+            // We persist the *sanitised* CSS (the bytes the server actually
+            // appended) so a redo re-publishes an identical block.
+            const stamp = result && result.stamp;
+            const label = (result && result.label) || change.label || 'Design update';
+            const slug = String(label)
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-|-$/g, '')
+                .slice(0, 80) || ('design-' + Date.now());
+            if (stamp) {
+                const sanitisedCss = sanitiseAiDesignCss(change);
+                const payload = { stamp: stamp, label: label, css: sanitisedCss };
+                pushToHistory('__design', slug, null, payload, 'design');
+                await recordContentRevisions([{
+                    site_key: CONFIG.SITE_KEY,
+                    section: '__design',
+                    field_name: slug,
+                    old_content: '',
+                    new_content: JSON.stringify(payload),
+                    source: 'ai',
+                }]);
+            }
         } catch (e) {
             console.error('Design save error:', e);
             failed++;
@@ -1727,9 +2046,24 @@ function renderRevisionHistory() {
         return;
     }
     list.innerHTML = revisionCache.map((rev, idx) => {
-        const key = rev.section + '.' + rev.field_name;
+        const isDesign = rev.section === '__design';
         const when = formatRevisionTime(rev.created_at);
-        const preview = (rev.new_content || '').replace(/\s+/g, ' ').slice(0, 120);
+        let key, preview, btnLabel;
+        if (isDesign) {
+            const friendly = String(rev.field_name || '').replace(/[-_]+/g, ' ').trim() || 'design update';
+            key = 'Design: ' + friendly;
+            let designLabel = '';
+            try {
+                const payload = JSON.parse(rev.new_content || '{}');
+                designLabel = payload && payload.label ? payload.label : '';
+            } catch (_) { designLabel = ''; }
+            preview = designLabel || friendly;
+            btnLabel = 'Revert design';
+        } else {
+            key = rev.section + '.' + rev.field_name;
+            preview = (rev.new_content || '').replace(/\s+/g, ' ').slice(0, 120);
+            btnLabel = 'Rollback';
+        }
         return '<div class="revision-item">' +
             '<div>' +
                 '<div class="revision-meta">' +
@@ -1739,7 +2073,7 @@ function renderRevisionHistory() {
                 '</div>' +
                 '<div class="revision-preview">' + escapeHtml(preview || '(empty)') + '</div>' +
             '</div>' +
-            '<button type="button" data-revision-rollback="' + idx + '">Rollback</button>' +
+            '<button type="button" data-revision-rollback="' + idx + '">' + escapeHtml(btnLabel) + '</button>' +
         '</div>';
     }).join('');
     list.querySelectorAll('[data-revision-rollback]').forEach(btn => {
@@ -1760,6 +2094,39 @@ function formatRevisionTime(value) {
 async function rollbackRevision(index) {
     const rev = revisionCache[index];
     if (!rev || !supabaseClient) return;
+
+    // Design revisions revert via the admin-edit Edge Function: it strips the
+    // stamped CSS block from styles.css and re-publishes the site (~60s).
+    if (rev.section === '__design') {
+        try {
+            const payload = JSON.parse(rev.new_content || '{}');
+            if (!payload || !payload.stamp) throw new Error('No stamp on revision');
+            const res = await fetch(CONFIG.SUPABASE_URL + '/functions/v1/admin-edit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + CONFIG.SUPABASE_ANON_KEY },
+                body: JSON.stringify({
+                    action: 'revert_design',
+                    site_key: CONFIG.SITE_KEY,
+                    session_token: sessionToken,
+                    stamp: payload.stamp,
+                }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || data.error) throw new Error(data.error || 'Revert failed');
+            showToast('Reverting "' + (payload.label || 'design') + '" — about a minute', 'success');
+            // Push the revert onto the undo stack so the user can undo it
+            // (which would re-apply via apply_design through performUndo's
+            // sibling path — actually the `performUndo` design path reverts
+            // by stamp, so undoing the revert means re-publishing the css).
+            pushToHistory('__design', rev.field_name, null, payload, 'design');
+            loadRevisionHistory();
+        } catch (e) {
+            console.error('Design revert failed:', e);
+            showToast('Could not revert design: ' + (e && e.message ? e.message : e), 'error');
+        }
+        return;
+    }
+
     const key = rev.section + '.' + rev.field_name;
     const currentValue = contentCache[key] || rev.new_content || '';
     const rollbackValue = rev.old_content || '';
@@ -2936,7 +3303,7 @@ async function loadDomainStatus() {
     if (!section || !CONFIG.SUPABASE_URL || !CONFIG.SITE_KEY) return;
 
     try {
-        const siteToken = sessionStorage.getItem('session_token') || '';
+        const siteToken = localStorage.getItem('session_token') || '';
         if (!siteToken) return;
         const res = await fetch(
             CONFIG.SUPABASE_URL + '/functions/v1/domain-status?site_key=' + encodeURIComponent(CONFIG.SITE_KEY),
