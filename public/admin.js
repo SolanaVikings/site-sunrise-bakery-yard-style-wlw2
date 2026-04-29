@@ -1577,7 +1577,23 @@ async function applyAiFieldChange(key, value, label, source) {
     const parsed = parseContentKey(key);
     if (!parsed) throw new Error('Invalid content field');
 
-    const oldValue = contentCache[key] || '';
+    // Capture the previous value for undo. Fall back to whatever is currently
+    // in the iframe if the cache hasn't been populated for this key yet
+    // (common for images that were baked into the original HTML — never
+    // edited, so never cached). Without this, undo would set src="" and
+    // show a broken image.
+    let oldValue = contentCache[key] || '';
+    if (!oldValue) {
+        try {
+            const iframe = document.getElementById('ai-preview-iframe');
+            const doc = iframe && iframe.contentDocument;
+            const el = doc && doc.querySelector('[data-content="' + escapeSelectorValue(key) + '"]');
+            if (el) {
+                if (el.tagName === 'IMG') oldValue = el.getAttribute('src') || '';
+                else oldValue = (el.textContent || '').trim();
+            }
+        } catch (_) {}
+    }
     const nextValue = value || '';
 
     const { error } = await supabaseClient
