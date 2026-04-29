@@ -821,3 +821,13 @@ body.chat-collapsed .chat-reopen-tab { display: flex; }
 .ai-slot-card__meta { display: flex; flex-direction: column; gap: 2px; }
 .ai-slot-card__meta strong { font-size: 13px; font-weight: 600; text-transform: capitalize; }
 .ai-slot-card__meta span { font-size: 11px; color: var(--ink-soft, #6B6865); font-family: ui-monospace, SFMono-Regular, monospace; }
+.ai-slot-card--custom { border-style: dashed; }
+.ai-slot-card__thumb--custom { color: var(--accent, #E63A1F); background: rgba(230, 58, 31, 0.06); }
+
+/* Pending-image chip — sits above the chat input while the user types
+   where the just-uploaded image should go. */
+.ai-pending-image-chip { display: flex; align-items: center; gap: 8px; padding: 6px 10px; background: var(--surface, #FAF6E9); border: 1px solid rgba(230, 58, 31, 0.4); border-radius: 6px; margin-bottom: 6px; font-size: 12px; }
+.ai-pending-image-chip img { width: 28px; height: 28px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
+.ai-pending-image-chip span { flex: 1; color: var(--ink, #121417); }
+.ai-pending-image-chip button { background: none; border: none; cursor: pointer; font-size: 18px; color: var(--ink-soft, #6B6865); padding: 0 4px; line-height: 1; }
+.ai-pending-image-chip button:hover { color: var(--ink, #121417); }

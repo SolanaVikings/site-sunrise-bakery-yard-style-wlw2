@@ -889,6 +889,7 @@ function initAiEditor() {
                     selected_page: currentAiPreviewPage || 'index',
                     plugin_context: getAiPluginContext(),
                     available_content: gatherAvailableContent(),
+                    pending_image_url: pendingImageUploadUrl || undefined,
                 }),
             });
             const data = await res.json().catch(() => ({}));
@@ -899,6 +900,8 @@ function initAiEditor() {
                 showToast(message, 'error');
                 return;
             }
+            // Once the AI has placed the image, drop the pending state.
+            if (pendingImageUploadUrl) clearPendingImageUpload();
             renderAiResponse(data);
         } catch (err) {
             thinking.remove();
@@ -1307,7 +1310,7 @@ function openImageSlotPicker(uploadedUrl) {
         return;
     }
 
-    grid.innerHTML = slots.map(s => `
+    const slotCards = slots.map(s => `
         <button type="button" class="ai-slot-card" data-slot-key="${escapeHtml(s.key)}">
             <div class="ai-slot-card__thumb">
                 ${s.currentSrc
@@ -1321,6 +1324,21 @@ function openImageSlotPicker(uploadedUrl) {
         </button>
     `).join('');
 
+    // Final tile: describe placement via chat. Lets the user place the image
+    // anywhere — including sections that don't currently have an image slot.
+    const customCard = `
+        <button type="button" class="ai-slot-card ai-slot-card--custom" data-slot-key="__custom__">
+            <div class="ai-slot-card__thumb ai-slot-card__thumb--custom">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></svg>
+            </div>
+            <div class="ai-slot-card__meta">
+                <strong>Somewhere else</strong>
+                <span>Describe where to put it</span>
+            </div>
+        </button>
+    `;
+    grid.innerHTML = slotCards + customCard;
+
     modal.removeAttribute('hidden');
 
     const close = () => modal.setAttribute('hidden', '');
@@ -1331,6 +1349,18 @@ function openImageSlotPicker(uploadedUrl) {
         card.onclick = async () => {
             const key = card.getAttribute('data-slot-key');
             close();
+            if (key === '__custom__') {
+                // Hand off to AI chat with the uploaded image URL preloaded.
+                pendingImageUploadUrl = uploadedUrl;
+                showPendingImageChip(uploadedUrl);
+                const chatInput = document.getElementById('ai-chat-input');
+                if (chatInput) {
+                    chatInput.placeholder = 'Describe where to place this image (e.g. "as background of the about section")';
+                    chatInput.focus();
+                }
+                showToast('Image ready — describe where to place it', 'success');
+                return;
+            }
             try {
                 await applyAiFieldChange(key, uploadedUrl, 'Image placed', 'manual');
                 showToast('Image placed in ' + key.split('.')[0], 'success');
@@ -1339,6 +1369,36 @@ function openImageSlotPicker(uploadedUrl) {
             }
         };
     });
+}
+
+// State for the "Somewhere else" flow — the URL is sent with the next chat
+// message so the AI can place it via a __design CSS override.
+let pendingImageUploadUrl = null;
+
+function showPendingImageChip(url) {
+    let chip = document.getElementById('ai-pending-image-chip');
+    if (!chip) {
+        chip = document.createElement('div');
+        chip.id = 'ai-pending-image-chip';
+        chip.className = 'ai-pending-image-chip';
+        const form = document.getElementById('ai-chat-form');
+        if (form) form.insertBefore(chip, form.firstChild);
+        else return;
+    }
+    chip.innerHTML = `
+        <img src="${escapeHtml(url)}" alt="" />
+        <span>Image attached — type where to place it</span>
+        <button type="button" data-clear-pending aria-label="Cancel">&times;</button>
+    `;
+    chip.querySelector('[data-clear-pending]').onclick = clearPendingImageUpload;
+}
+
+function clearPendingImageUpload() {
+    pendingImageUploadUrl = null;
+    const chip = document.getElementById('ai-pending-image-chip');
+    if (chip) chip.remove();
+    const chatInput = document.getElementById('ai-chat-input');
+    if (chatInput) chatInput.placeholder = 'Describe a content or design change...';
 }
 
 async function replaceSelectedAiImageWithUpload(file) {
