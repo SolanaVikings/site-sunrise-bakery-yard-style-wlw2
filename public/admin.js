@@ -202,7 +202,15 @@ async function performUndo() {
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || data.error) throw new Error(data.error || 'Revert failed');
-            showToast('Reverting design — publishing in ~60s', 'info');
+            // Runtime DB-driven overrides — revert is instant on next iframe
+            // reload, no 60s redeploy. Bust the iframe cache so the user sees
+            // the change immediately.
+            const iframe = document.getElementById('ai-preview-iframe');
+            if (iframe) {
+                const base = (iframe.getAttribute('src') || '').split('?')[0] || 'index.html';
+                iframe.setAttribute('src', base + '?cb=' + Date.now());
+            }
+            showToast('Reverted', 'success');
         } catch (e) {
             historyIndex++; // restore index since we couldn't revert
             showToast('Could not revert design: ' + (e && e.message ? e.message : e), 'error');
@@ -211,28 +219,36 @@ async function performUndo() {
         return;
     }
 
-    const el = getFieldControl(entry.section, entry.field);
-    if (el) {
-        isApplyingHistory = true;
-        try {
-            setFieldControlValue(el, entry.oldValue);
-            if (!el.classList.contains('image-upload')) {
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-            } else {
-                hasUnsavedChanges = true;
-                updateSaveStatus('unsaved');
-                resetAutoSaveTimer();
-                backupToLocalStorage();
-            }
-        } finally {
-            isApplyingHistory = false;
+    // Content undo: write the old value back to site_content directly so it
+    // works regardless of whether the form view (Text editor) is rendered.
+    const key = entry.section + '.' + entry.field;
+    const oldValue = entry.oldValue || '';
+    try {
+        if (supabaseClient) {
+            const { error } = await supabaseClient.from('site_content').upsert({
+                site_key: CONFIG.SITE_KEY,
+                section: entry.section,
+                field_name: entry.field,
+                content: oldValue,
+                updated_at: new Date().toISOString(),
+            }, { onConflict: 'site_key,section,field_name' });
+            if (error) throw error;
         }
-        const key = entry.section + '.' + entry.field;
-        contentCache[key] = entry.oldValue || '';
-        updateAiPreviewField(key, entry.oldValue, true);
+        contentCache[key] = oldValue;
+        // Reflect in iframe immediately
+        updateAiPreviewField(key, oldValue, true);
+        // Reflect in form if present (still works in legacy flows)
+        const el = getFieldControl(entry.section, entry.field);
+        if (el) {
+            isApplyingHistory = true;
+            try { setFieldControlValue(el, oldValue); } finally { isApplyingHistory = false; }
+        }
+        showToast('Reverted', 'success');
+    } catch (err) {
+        historyIndex++;
+        showToast('Could not revert: ' + (err && err.message ? err.message : err), 'error');
     }
     updateUndoRedoButtons();
-    updatePreview();
 }
 
 async function performRedo() {
@@ -256,40 +272,52 @@ async function performRedo() {
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || data.error) throw new Error(data.error || 'Re-publish failed');
-            // The server stamps a fresh timestamp on re-apply — capture it
-            // so the next undo can revert this exact stamped block.
+            // Server stamps a fresh timestamp on re-apply — capture it so the
+            // next undo can revert this exact stamped block. Reload iframe to
+            // pick up the new override (runtime DB-driven, instant).
             if (entry.newValue) entry.newValue.stamp = data.stamp || entry.newValue.stamp;
-            showToast('Re-publishing design — about a minute', 'info');
+            const iframe = document.getElementById('ai-preview-iframe');
+            if (iframe) {
+                const base = (iframe.getAttribute('src') || '').split('?')[0] || 'index.html';
+                iframe.setAttribute('src', base + '?cb=' + Date.now());
+            }
+            showToast('Re-applied', 'success');
         } catch (e) {
             historyIndex--;
-            showToast('Could not redo design: ' + (e && e.message ? e.message : e), 'error');
+            showToast('Could not redo: ' + (e && e.message ? e.message : e), 'error');
         }
         updateUndoRedoButtons();
         return;
     }
 
-    const el = getFieldControl(entry.section, entry.field);
-    if (el) {
-        isApplyingHistory = true;
-        try {
-            setFieldControlValue(el, entry.newValue);
-            if (!el.classList.contains('image-upload')) {
-                el.dispatchEvent(new Event('input', { bubbles: true }));
-            } else {
-                hasUnsavedChanges = true;
-                updateSaveStatus('unsaved');
-                resetAutoSaveTimer();
-                backupToLocalStorage();
-            }
-        } finally {
-            isApplyingHistory = false;
+    // Content redo: write the new value to site_content directly so it works
+    // without the form view being rendered.
+    const key = entry.section + '.' + entry.field;
+    const newValue = entry.newValue || '';
+    try {
+        if (supabaseClient) {
+            const { error } = await supabaseClient.from('site_content').upsert({
+                site_key: CONFIG.SITE_KEY,
+                section: entry.section,
+                field_name: entry.field,
+                content: newValue,
+                updated_at: new Date().toISOString(),
+            }, { onConflict: 'site_key,section,field_name' });
+            if (error) throw error;
         }
-        const key = entry.section + '.' + entry.field;
-        contentCache[key] = entry.newValue || '';
-        updateAiPreviewField(key, entry.newValue, true);
+        contentCache[key] = newValue;
+        updateAiPreviewField(key, newValue, true);
+        const el = getFieldControl(entry.section, entry.field);
+        if (el) {
+            isApplyingHistory = true;
+            try { setFieldControlValue(el, newValue); } finally { isApplyingHistory = false; }
+        }
+        showToast('Re-applied', 'success');
+    } catch (err) {
+        historyIndex--;
+        showToast('Could not redo: ' + (err && err.message ? err.message : err), 'error');
     }
     updateUndoRedoButtons();
-    updatePreview();
 }
 
 function updateUndoRedoButtons() {
