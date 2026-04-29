@@ -91,7 +91,6 @@
                         <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
                     </svg>
                 </button>
-                <button id="all-fields-toggle" class="btn btn-ghost" type="button" title="Show every field as a form (advanced)">All fields</button>
                 <a href="index.html" target="_blank" class="btn btn-secondary">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
@@ -122,6 +121,8 @@
                         <button id="ai-guide-btn" class="btn btn-ghost" type="button" title="Editor guide" aria-expanded="false">Guide</button>
                         <button id="ai-tools-btn" class="btn btn-ghost" type="button" title="Site tools" aria-expanded="false">Tools</button>
                         <button id="ai-history-btn" class="btn btn-ghost" type="button" title="Recent changes" aria-expanded="false">History</button>
+                        <button id="ai-add-image-btn" class="btn btn-ghost" type="button" title="Upload an image and choose where to place it">+ Image</button>
+                        <input type="file" id="ai-add-image-input" accept="image/*" hidden>
                         <button id="ai-clear-selection" class="btn btn-ghost btn-icon" title="Clear selection" hidden>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </button>
@@ -182,6 +183,9 @@
                         </button>
                         <button type="button" id="ai-image-generate-btn" class="ai-image-tool" title="Generate replacement image">
                             AI
+                        </button>
+                        <button type="button" id="ai-image-remove-btn" class="ai-image-tool" title="Remove image">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
                         </button>
                     </div>
                     <textarea id="ai-chat-input" class="ai-chat-input" rows="2" placeholder="Describe a change…" autocomplete="off"></textarea>
@@ -259,7 +263,7 @@
         </main>
 
         <!-- Sticky Save Bar -->
-        <div class="save-bar" id="save-bar">
+        <div class="save-bar" id="save-bar" hidden>
             <div class="save-bar-content">
                 <span id="save-status" class="save-status saved">
                     <span class="status-dot"></span>
@@ -315,6 +319,19 @@
                 </div>
             </div>
             <p class="shortcuts-note">On Mac, use Cmd instead of Ctrl</p>
+        </div>
+    </div>
+
+    <!-- Image-slot picker modal — shown after Upload image -->
+    <div id="ai-slot-picker" class="ai-slot-picker" hidden>
+        <div class="ai-slot-picker__backdrop" data-slot-close></div>
+        <div class="ai-slot-picker__panel" role="dialog" aria-labelledby="ai-slot-picker-title">
+            <div class="ai-slot-picker__head">
+                <h3 id="ai-slot-picker-title">Where should this image go?</h3>
+                <button type="button" class="ai-slot-picker__close" data-slot-close aria-label="Cancel">&times;</button>
+            </div>
+            <p class="ai-slot-picker__hint">Click any image slot to place your upload there. Replaces what's currently in that spot.</p>
+            <div id="ai-slot-picker-grid" class="ai-slot-picker__grid"></div>
         </div>
     </div>
 

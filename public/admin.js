@@ -7,8 +7,14 @@
 // property of window in regular scripts (only var does). Use the bare
 // identifier through typeof to detect it without throwing.
 let supabaseClient = null;
+// We don't use supabase auth — auth happens via our own session_token sent
+// as the `x-site-token` header. Disabling GoTrue keeps multiple clients (the
+// admin parent + the iframe's script.js + plugins) from stomping each other
+// on the shared localStorage auth key, which was causing intermittent 401s
+// on direct site_content writes.
+const ADMIN_SUPA_OPTS = { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'gmof-admin' } };
 if (typeof CONFIG !== 'undefined' && CONFIG.SUPABASE_URL && CONFIG.SUPABASE_URL !== 'YOUR_SUPABASE_URL' && typeof window.supabase !== 'undefined') {
-    supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+    supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, ADMIN_SUPA_OPTS);
 }
 
 // DOM Elements
@@ -524,6 +530,7 @@ if (hasUrlToken) {
             sessionToken = storedToken;
             isAuthenticated = true;
             supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+                ...ADMIN_SUPA_OPTS,
                 global: { headers: { 'x-site-token': sessionToken } }
             });
             showDashboard();
@@ -573,6 +580,7 @@ async function checkSupabaseSession() {
 
                         // Recreate client with session token
                         supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+                            ...ADMIN_SUPA_OPTS,
                             global: { headers: { 'x-site-token': sessionToken } }
                         });
 
@@ -645,6 +653,7 @@ async function checkTokenLogin() {
         localStorage.setItem('authenticated', 'true');
         clearAiChatHistory();
         supabaseClient = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY, {
+            ...ADMIN_SUPA_OPTS,
             global: { headers: { 'x-site-token': sessionToken } }
         });
         isAuthenticated = true;
@@ -740,7 +749,7 @@ function setAdminEditorMode(mode) {
         else saveBar.setAttribute('hidden', '');
     }
     if (dashboard) dashboard.classList.toggle('is-ai-mode', !showFields);
-    if (toggle) toggle.textContent = showFields ? 'AI editor' : 'All fields';
+    if (toggle) toggle.textContent = showFields ? 'AI editor' : 'Text editor';
 
     if (showFields) {
         closeAiSideDrawers();
@@ -1115,6 +1124,43 @@ function initAiImageTools() {
             replaceSelectedAiImageWithGeneratedImage();
         });
     }
+
+    // Persistent "+ Image" button — upload first, then pick a slot.
+    // Lets the user add/replace images without first selecting one.
+    const addImageBtn = document.getElementById('ai-add-image-btn');
+    const addImageInput = document.getElementById('ai-add-image-input');
+    if (addImageBtn && addImageInput) {
+        addImageBtn.addEventListener('click', () => addImageInput.click());
+        addImageInput.addEventListener('change', async () => {
+            const file = addImageInput.files && addImageInput.files[0];
+            addImageInput.value = '';
+            if (!file) return;
+            if (!file.type || !file.type.startsWith('image/')) {
+                showToast('Please choose an image file', 'error');
+                return;
+            }
+            await uploadAndPickSlot(file);
+        });
+    }
+
+    const removeBtn = document.getElementById('ai-image-remove-btn');
+    if (removeBtn) {
+        removeBtn.addEventListener('click', async () => {
+            if (!aiSelectedKey || !aiSelectedIsImage) {
+                showToast('Select an image in the preview first', 'error');
+                return;
+            }
+            const key = aiSelectedKey;
+            try {
+                await applyAiFieldChange(key, '', key, 'manual');
+                showToast('Image removed', 'success');
+                clearAiSelection(AI_DEFAULT_HINT);
+            } catch (err) {
+                console.error('Image remove failed:', err);
+                showToast('Could not remove image: ' + (err && err.message ? err.message : err), 'error');
+            }
+        });
+    }
 }
 
 function setAiImageToolsVisible(visible) {
@@ -1209,6 +1255,90 @@ function parseContentKey(key) {
 function looksLikeImageField(key) {
     const field = String(key || '').split('.').pop() || '';
     return /(image|img|photo|picture|logo|gallery|avatar|thumbnail|background|banner)/i.test(field);
+}
+
+// Upload an image, then let the user pick which existing image slot it
+// should go into. Used by the persistent "+ Image" button when no image
+// is currently selected.
+async function uploadAndPickSlot(file) {
+    const addBtn = document.getElementById('ai-add-image-btn');
+    if (!CONFIG.SUPABASE_URL || !sessionToken) {
+        showToast('Sign in again before uploading', 'error');
+        return;
+    }
+    try {
+        if (addBtn) { addBtn.disabled = true; addBtn.textContent = 'Uploading…'; }
+        // parseContentKey() requires "section.field" format. Use a synthetic
+        // key that satisfies it for the storage path; the real placement key
+        // is chosen by the user in the slot picker after upload completes.
+        const tempKey = 'unplaced.upload_' + Date.now();
+        const publicUrl = await uploadAiImageToStorage(file, tempKey, file.name);
+        if (addBtn) { addBtn.disabled = false; addBtn.textContent = '+ Image'; }
+        openImageSlotPicker(publicUrl);
+    } catch (err) {
+        console.error('Image upload failed:', err);
+        showToast(err && err.message ? err.message : 'Upload failed', 'error');
+        if (addBtn) { addBtn.disabled = false; addBtn.textContent = '+ Image'; }
+    }
+}
+
+function openImageSlotPicker(uploadedUrl) {
+    const modal = document.getElementById('ai-slot-picker');
+    const grid = document.getElementById('ai-slot-picker-grid');
+    if (!modal || !grid) return;
+
+    const iframe = document.getElementById('ai-preview-iframe');
+    let doc = null;
+    try { doc = iframe && iframe.contentDocument; } catch (_) {}
+    const slots = [];
+    if (doc) {
+        doc.querySelectorAll('[data-content]').forEach(el => {
+            const key = el.getAttribute('data-content');
+            const isImg = el.tagName === 'IMG' || looksLikeImageField(key, '');
+            if (!isImg) return;
+            const currentSrc = el.tagName === 'IMG' ? (el.getAttribute('src') || '') : '';
+            const label = key;
+            const sectionLabel = key.split('.')[0].replace(/_/g, ' ');
+            slots.push({ key, label, sectionLabel, currentSrc });
+        });
+    }
+    if (!slots.length) {
+        showToast('No image slots found on this page', 'error');
+        return;
+    }
+
+    grid.innerHTML = slots.map(s => `
+        <button type="button" class="ai-slot-card" data-slot-key="${escapeHtml(s.key)}">
+            <div class="ai-slot-card__thumb">
+                ${s.currentSrc
+                    ? `<img src="${escapeHtml(s.currentSrc)}" alt="" loading="lazy">`
+                    : '<span class="ai-slot-card__empty">Empty slot</span>'}
+            </div>
+            <div class="ai-slot-card__meta">
+                <strong>${escapeHtml(s.sectionLabel)}</strong>
+                <span>${escapeHtml(s.label)}</span>
+            </div>
+        </button>
+    `).join('');
+
+    modal.removeAttribute('hidden');
+
+    const close = () => modal.setAttribute('hidden', '');
+    modal.querySelectorAll('[data-slot-close]').forEach(el => {
+        el.onclick = close;
+    });
+    grid.querySelectorAll('.ai-slot-card').forEach(card => {
+        card.onclick = async () => {
+            const key = card.getAttribute('data-slot-key');
+            close();
+            try {
+                await applyAiFieldChange(key, uploadedUrl, 'Image placed', 'manual');
+                showToast('Image placed in ' + key.split('.')[0], 'success');
+            } catch (err) {
+                showToast('Could not place image: ' + (err && err.message ? err.message : err), 'error');
+            }
+        };
+    });
 }
 
 async function replaceSelectedAiImageWithUpload(file) {
@@ -1490,6 +1620,11 @@ function resolveAiClickTarget(rawTarget, doc) {
     while (node && node !== doc.body && node.nodeType === 1) {
         const tag = node.tagName ? node.tagName.toLowerCase() : '';
         if (!inlineTags[tag]) break;
+        // Buttons rendered as <a class="btn …"> should be selected as-is, not
+        // walked up to their parent section. Otherwise "make this button yellow"
+        // colors the whole row.
+        const cls = ((node.className || '') + '').toLowerCase();
+        if (/\bbtn\b|button|\bcta\b/.test(cls) || cls.indexOf('btn-') >= 0 || cls.indexOf('btn_') >= 0 || cls.indexOf('btn--') >= 0) break;
         if (!node.parentElement) break;
         node = node.parentElement;
     }
@@ -1588,16 +1723,34 @@ function injectAiClickHandlers(iframe) {
         // Link intercept: clicks on <a> inside the editor iframe must NOT
         // navigate. Show a friendly toast pointing to the page tabs when
         // it's a page-link, otherwise explain links are preview-only.
+        // EXCEPTION: buttons rendered as <a class="btn"> should still be
+        // selectable for editing — those skip the toast and fall through
+        // to the normal selection flow.
         const anchor = e.target && e.target.closest ? e.target.closest('a') : null;
         if (anchor) {
             const href = (anchor.getAttribute('href') || '').trim();
-            if (href && href !== '#') {
+            const anchorCls = ((anchor.className || '') + '').toLowerCase();
+            const isButtonAnchor = /\bbtn\b|button|\bcta\b/.test(anchorCls)
+                || anchorCls.indexOf('btn-') >= 0
+                || anchorCls.indexOf('btn--') >= 0
+                || anchorCls.indexOf('btn_') >= 0;
+            if (href && href !== '#' && !isButtonAnchor) {
                 const isPageLink = /(?:^|\/)([\w-]+)\.html(?:[?#]|$)/i.test(href);
-                if (isPageLink) {
+                // Suppress the page-tabs hint on single-page sites — there are no
+                // tabs to point at and the message reads as a bug.
+                const tabsEl = document.getElementById('ai-preview-page-tabs');
+                const hasPageTabs = !!(tabsEl && !tabsEl.hidden && tabsEl.offsetParent !== null);
+                if (isPageLink && hasPageTabs) {
                     showAdminLinkToast(
                         'You\u2019re in the AI editor — links don\u2019t navigate here.',
                         'To switch pages, use the page tabs above the preview.',
                         true
+                    );
+                } else if (isPageLink) {
+                    showAdminLinkToast(
+                        'You\u2019re in the AI editor — links don\u2019t navigate here.',
+                        'Visitors will be able to use this on your live site.',
+                        false
                     );
                 } else {
                     const label = /^mailto:/i.test(href) ? 'email link'
@@ -1763,8 +1916,22 @@ function keepButtonScopedAiCssOnly(css) {
         .map(rule => {
             const braceIdx = rule.indexOf('{');
             const selector = rule.slice(0, braceIdx).trim();
+            const body = rule.slice(braceIdx);
             if (!selector || selector.charAt(0) === '@') return '';
-            if (/^:root\b|^html\b|^body\b/i.test(selector)) return '';
+            // :root/html/body rules are now ALLOWED if they only set accent /
+            // button-related custom properties — the recommended way to
+            // change site-wide button color is to override --accent and its
+            // companions. Strip rules that touch unrelated globals.
+            if (/^:root\b|^html\b|^body\b/i.test(selector)) {
+                const decls = body
+                    .replace(/^\{|\}$/g, '')
+                    .split(';')
+                    .map(d => d.trim())
+                    .filter(Boolean);
+                if (!decls.length) return '';
+                const allButtonRelated = decls.every(d => /^--[\w-]*(?:accent|primary|cta|btn|button|brand)\b/i.test(d));
+                return allButtonRelated ? rule.trim() : '';
+            }
             return aiDesignSelectorIsButtonScoped(selector) ? rule.trim() : '';
         })
         .filter(Boolean)
@@ -1961,16 +2128,28 @@ async function applyAiChanges(changes, msgEl, designChanges) {
     } else {
         const note = document.createElement('div');
         note.style.cssText = 'margin-top:6px;font-size:12px;color:#2C6E3F;';
-        note.textContent = designChanges.length
-            ? 'Saved — design publish started. It may take about a minute to appear on the live site.'
-            : 'Saved — visible on your site instantly.';
+        note.textContent = 'Saved — visible on your site instantly.';
         msgEl.appendChild(note);
     }
     if (saved > 0) {
         lastSaveTime = Date.now();
         updateSaveTimeDisplay();
         if (!hasUnsavedChanges) updateSaveStatus('saved');
-        showToast(designChanges.length ? 'AI design update publishing' : (saved === 1 ? 'AI change saved' : saved + ' AI changes saved'), 'success');
+        showToast(saved === 1 ? 'AI change saved' : saved + ' AI changes saved', 'success');
+        // For design changes: reload the iframe so it picks up the just-saved
+        // override via script.js. The preview <style> tag we already injected
+        // covers the visible delta; the reload is what proves the persisted
+        // version works end-to-end.
+        if (publishedDesignChanges.length > 0) {
+            const iframe = document.getElementById('ai-preview-iframe');
+            if (iframe) {
+                // Strip any existing query string and re-add a fresh cache-bust.
+                // Original was concatenating with '&' when '?' was already in the
+                // URL, producing index.html&cb=… (invalid → 404).
+                const base = (iframe.getAttribute('src') || '').split('?')[0] || 'index.html';
+                iframe.setAttribute('src', base + '?cb=' + Date.now());
+            }
+        }
     }
     // Clear selection after a successful apply
     if (saved > 0) {
@@ -2760,8 +2939,32 @@ async function saveContent() {
     } catch (err) {
         console.error('Error saving:', err);
         updateSaveStatus('error');
-        if (retryBtn) retryBtn.style.display = 'inline-flex';
-        showToast('Failed to save changes', 'error');
+        // Stop the auto-save retry storm when the session is invalid OR when
+        // RLS denies the write. Supabase errors come in many shapes; cover all
+        // the auth-ish + permission-ish ones we've actually seen in the wild:
+        // 401, 403, JWT/token/expired/unauthorized strings, RLS code 42501,
+        // "row-level security" / "policy" / "permission" wording.
+        const status = err?.status || err?.statusCode || 0;
+        const code = String(err?.code || '');
+        const msg = String(err?.message || err || '');
+        const looksAuthOrRls = status === 401 || status === 403
+            || code === '42501' || code === 'PGRST301' || code === 'PGRST116'
+            || /jwt|token|expired|unauthor|row[- ]level security|policy|permission denied/i.test(msg);
+        if (looksAuthOrRls) {
+            if (autoSaveTimer) { clearTimeout(autoSaveTimer); autoSaveTimer = null; }
+            hasUnsavedChanges = false;
+            showToast('Session expired. Please log in again.', 'error');
+            sessionToken = null;
+            try { localStorage.removeItem('session_token'); localStorage.removeItem('authenticated'); } catch (_) {}
+            setTimeout(() => {
+                isAuthenticated = false;
+                if (loginScreen) loginScreen.style.display = 'flex';
+                if (dashboard) dashboard.style.display = 'none';
+            }, 1500);
+        } else {
+            if (retryBtn) retryBtn.style.display = 'inline-flex';
+            showToast('Failed to save changes', 'error');
+        }
     } finally {
         if (activeUploads === 0) {
             saveBtn.disabled = false;

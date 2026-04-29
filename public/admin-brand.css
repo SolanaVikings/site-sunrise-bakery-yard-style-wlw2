@@ -229,6 +229,16 @@ html, body {
 }
 
 /* ── AI EDITOR (split iframe + chat) ─────────────────────── */
+/* Both layout panels must respect the [hidden] attribute — without this,
+   the JS toggle that sets hidden="" leaves them visible because display:grid
+   overrides hidden. Result: AI editor + Text editor both showing at once,
+   save bar overlapping the chat input, etc. Same for the save-bar so it
+   doesn't show in AI mode (we removed the form-view toggle entirely so
+   save-bar should never appear). */
+.ai-editor-main[hidden],
+.dashboard-main[hidden],
+.save-bar[hidden] { display: none !important; }
+
 .ai-editor-main {
     display: grid;
     grid-template-columns: 1fr var(--chat-col, 380px);
@@ -791,3 +801,23 @@ body.chat-collapsed .chat-reopen-tab { display: flex; }
 /* Click-target outline injected into iframe */
 .__ai-hover { outline: 2px dashed var(--accent) !important; outline-offset: 2px !important; cursor: crosshair !important; }
 .__ai-selected { outline: 2px solid var(--accent) !important; outline-offset: 2px !important; background: rgba(201, 68, 43, 0.06) !important; }
+
+/* Image slot picker modal — shown after Upload image */
+.ai-slot-picker { position: fixed; inset: 0; z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.ai-slot-picker[hidden] { display: none; }
+.ai-slot-picker__backdrop { position: absolute; inset: 0; background: rgba(18,20,23,0.5); }
+.ai-slot-picker__panel { position: relative; background: var(--bg, #F4EEDE); color: var(--ink, #121417); border: 1px solid rgba(18,20,23,0.12); border-radius: 12px; box-shadow: 0 24px 64px rgba(0,0,0,0.25); width: min(720px, 92vw); max-height: 86vh; overflow: auto; padding: 24px; font-family: Inter, system-ui, sans-serif; }
+.ai-slot-picker__head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.ai-slot-picker__head h3 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.ai-slot-picker__close { background: none; border: none; font-size: 28px; line-height: 1; cursor: pointer; color: var(--ink-soft, #6B6865); padding: 0 4px; }
+.ai-slot-picker__close:hover { color: var(--ink, #121417); }
+.ai-slot-picker__hint { margin: 0 0 16px; font-size: 13px; color: var(--ink-soft, #6B6865); }
+.ai-slot-picker__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.ai-slot-card { background: var(--surface, #FAF6E9); border: 1px solid rgba(18,20,23,0.08); border-radius: 8px; padding: 8px; cursor: pointer; text-align: left; font-family: inherit; transition: border-color 120ms ease, transform 120ms ease; }
+.ai-slot-card:hover { border-color: var(--accent, #E63A1F); transform: translateY(-1px); }
+.ai-slot-card__thumb { aspect-ratio: 4 / 3; background: rgba(18,20,23,0.06); border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+.ai-slot-card__thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ai-slot-card__empty { font-size: 11px; color: var(--ink-soft, #6B6865); text-transform: uppercase; letter-spacing: 0.08em; }
+.ai-slot-card__meta { display: flex; flex-direction: column; gap: 2px; }
+.ai-slot-card__meta strong { font-size: 13px; font-weight: 600; text-transform: capitalize; }
+.ai-slot-card__meta span { font-size: 11px; color: var(--ink-soft, #6B6865); font-family: ui-monospace, SFMono-Regular, monospace; }
