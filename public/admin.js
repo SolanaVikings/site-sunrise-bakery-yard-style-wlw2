@@ -3590,7 +3590,11 @@ async function loadDomainStatus() {
         if (!siteToken) return;
         const res = await fetch(
             CONFIG.SUPABASE_URL + '/functions/v1/domain-status?site_key=' + encodeURIComponent(CONFIG.SITE_KEY),
-            { headers: { 'apikey': CONFIG.SUPABASE_ANON_KEY, 'x-site-token': siteToken } }
+            { headers: {
+                'apikey': CONFIG.SUPABASE_ANON_KEY,
+                'Authorization': 'Bearer ' + CONFIG.SUPABASE_ANON_KEY,
+                'x-site-token': siteToken
+            } }
         );
         const data = await res.json();
 
