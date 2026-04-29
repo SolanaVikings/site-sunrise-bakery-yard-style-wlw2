@@ -708,6 +708,21 @@ function showDashboard() {
 const aiPendingChanges = []; // { key, value, old_value, label }
 let aiSelectedKey = null;
 let aiSelectedIsImage = false;
+// CSS selector for a layout-only selection (no data-content). Captured so the
+// AI knows where the user clicked when they say "put it here" with a pending
+// image upload, instead of falling back to the most obvious image slot.
+let aiSelectedLayoutSelector = null;
+
+function getCssSelectorForElement(el) {
+    if (!el || !el.tagName) return '';
+    const tag = el.tagName.toLowerCase();
+    if (el.id) return tag + '#' + el.id;
+    const classes = el.classList
+        ? Array.from(el.classList).filter(c => c && !c.startsWith('__') && c !== 'data-ai-selected')
+        : [];
+    if (classes.length) return tag + '.' + classes.slice(0, 3).join('.');
+    return tag;
+}
 let aiIframeReady = false;
 let currentAiPreviewPage = 'index';
 let currentAiPreviewDevice = 'desktop';
@@ -890,6 +905,7 @@ function initAiEditor() {
                     plugin_context: getAiPluginContext(),
                     available_content: gatherAvailableContent(),
                     pending_image_url: pendingImageUploadUrl || undefined,
+                    selected_layout_selector: aiSelectedLayoutSelector || undefined,
                 }),
             });
             const data = await res.json().catch(() => ({}));
@@ -1838,12 +1854,16 @@ function injectAiClickHandlers(iframe) {
         if (!target) {
             if (rawTarget && rawTarget !== doc.body && rawTarget !== doc.documentElement) {
                 rawTarget.classList.add('__ai-selected');
+                aiSelectedLayoutSelector = getCssSelectorForElement(rawTarget);
                 setAiSelectionUi('Layout selected: ' + getReadableElementLabel(rawTarget) + '. Published sites can edit saved copy/images only.', null, false, true);
             } else {
+                aiSelectedLayoutSelector = null;
                 clearAiSelection('That part is layout/design. Ask for a design change, or click saved copy/images for content edits.');
             }
             return;
         }
+        // Picked a content element — drop any layout selector
+        aiSelectedLayoutSelector = null;
         const key = target.getAttribute('data-content');
         if (!key) return;
 
