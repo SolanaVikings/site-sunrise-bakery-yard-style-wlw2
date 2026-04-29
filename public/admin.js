@@ -151,7 +151,16 @@ function updateAiPreviewField(key, value, shouldFlash) {
     if (!doc) return;
     doc.querySelectorAll('[data-content="' + escapeSelectorValue(key) + '"]').forEach(el => {
         if (el.tagName === 'IMG') {
-            el.src = value || '';
+            // Cache-bust the IMG element's src so the browser re-renders even
+            // when reverting to a URL it loaded recently. The DB still stores
+            // the clean URL — only the visible attribute carries ?__t=now.
+            const u = value || '';
+            if (u) {
+                const sep = u.indexOf('?') >= 0 ? '&' : '?';
+                el.src = u + sep + '__t=' + Date.now();
+            } else {
+                el.removeAttribute('src');
+            }
         } else {
             el.textContent = value || '';
         }
